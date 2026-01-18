@@ -271,10 +271,11 @@ func (a *App) View() string {
 		return "Loading..."
 	}
 
-	// Header
+	// Header with top padding for breathing room
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("39")).
+		PaddingTop(1).
 		MarginBottom(1)
 
 	header := headerStyle.Render("PRDMonitor - Kanban Board")

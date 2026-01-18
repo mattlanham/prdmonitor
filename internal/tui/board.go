@@ -156,8 +156,8 @@ func (b *Board) SetSize(width, height int) {
 	b.width = width
 	b.height = height
 
-	// Reserve space for header and footer (about 4 lines)
-	availableHeight := height - 4
+	// Reserve space for header (with top padding), margin, and footer (about 5 lines)
+	availableHeight := height - 5
 	if availableHeight < 5 {
 		availableHeight = 5
 	}
