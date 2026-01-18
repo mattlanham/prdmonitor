@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# MODEL="openai/gpt-5.2-codex"
 MODEL="anthropic/claude-opus-4-5"
 MAX_ITERATIONS=${1:-10}
 SCRIPT_DIR="$(cd "$(dirname \
