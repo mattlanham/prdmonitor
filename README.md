@@ -72,6 +72,8 @@ go mod download
 
 ## Usage
 
+If you've added PRDMonitor to your PATH:
+
 ```bash
 # Monitor current directory
 prdmonitor
@@ -81,6 +83,14 @@ prdmonitor /path/to/projects
 
 # Try it with the included example directory
 prdmonitor example
+```
+
+Or run directly from the build directory:
+
+```bash
+./prdmonitor
+./prdmonitor /path/to/projects
+./prdmonitor example
 ```
 
 ### Keyboard Shortcuts
