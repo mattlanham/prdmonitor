@@ -162,10 +162,14 @@
 - Filter persists during session but resets on restart (not persisted to disk)
 
 ### Card Sorting Pattern
-- Cards in columns are sorted by file modification time (most recently changed first)
+- Incomplete and In Progress columns are sorted by file modification time (most recently changed first)
+- Complete column is sorted by `updatedAt` field (if present), falling back to file modification time
 - `Column.SortByModTime()` sorts cards by `Card.ModTime` in descending order (newest first)
+- `Column.SortByUpdatedAt()` sorts cards by `Card.GetCompletedSortTime()` (prefers `UpdatedAt` over `ModTime`)
 - `Column.SortByPriority()` still available for priority-based sorting (lower values first)
-- Board's `NewBoardWithFilter()` uses `SortByModTime()` for all columns
+- Board's `NewBoardWithFilter()` uses `SortByModTime()` for incomplete/in-progress, `SortByUpdatedAt()` for complete
+- `Card.UpdatedAt` is parsed from `story.UpdatedAt` string field (supports RFC3339, ISO 8601 variants)
+- `Card.GetCompletedSortTime()` returns `UpdatedAt` if non-zero, otherwise `ModTime`
 - All stories from the same prd.json file share the same ModTime
 - Sorting updates automatically when files are re-parsed (on file change detection)
 
@@ -960,4 +964,33 @@
   - New cards should NOT animate - only cards that move between columns
   - `rebuildBoard()` now returns bool indicating if animations started, enabling conditional tick
   - Test animation expiry by setting `AnimStart` to past time: `time.Now().Add(-2 * AnimationDuration)`
+---
+
+## 2026-01-18 - PM-024
+- **What was implemented:** Use updatedAt field for completed column ordering - completed stories sort by updatedAt (if present) instead of file modification time
+- **Files changed:**
+  - `internal/model/model.go` - Added `UpdatedAt` string field to UserStory struct with JSON tag
+  - `internal/tui/card.go` - Added `UpdatedAt` time.Time field to Card struct, added `GetCompletedSortTime()` method, updated `NewCardWithModTime()` to parse updatedAt from story
+  - `internal/tui/column.go` - Added `SortByUpdatedAt()` method for complete column sorting
+  - `internal/tui/board.go` - Changed complete column from `SortByModTime()` to `SortByUpdatedAt()`
+  - `internal/tui/tui_test.go` - Added 11 new tests for updatedAt sorting functionality
+- **Tests added:**
+  - TestCard_GetCompletedSortTime_UsesUpdatedAtIfSet - Tests updatedAt preferred over ModTime
+  - TestCard_GetCompletedSortTime_FallsBackToModTime - Tests fallback to ModTime when updatedAt not set
+  - TestColumn_SortByUpdatedAt - Tests sorting by updatedAt time
+  - TestColumn_SortByUpdatedAt_FallsBackToModTime - Tests mixed cards with/without updatedAt
+  - TestColumn_SortByUpdatedAt_EmptyColumn - Tests empty column handling
+  - TestNewCardWithModTime_ParsesUpdatedAt - Tests parsing ISO 8601 timestamp
+  - TestNewCardWithModTime_ParsesUpdatedAt_MultipleFormats - Tests RFC3339, date-only, invalid formats
+  - TestNewBoard_CompleteColumnSortsByUpdatedAt - Integration test for complete column sorting
+  - TestNewBoard_IncompleteAndInProgressSortByModTime - Verifies other columns still use ModTime
+  - TestModel_UserStory_UpdatedAt_Field - Tests model field exists
+- **Learnings:**
+  - JSON `encoding/json` automatically parses new fields when added to struct - no parser changes needed
+  - Store parsed time.Time on Card rather than re-parsing string repeatedly during sorting
+  - Support multiple date formats for flexibility: RFC3339 (`2006-01-02T15:04:05Z07:00`), ISO without timezone, date-only
+  - Use `time.Time.IsZero()` to check if a time value was set
+  - Separate sorting method `SortByUpdatedAt()` keeps `SortByModTime()` unchanged for incomplete/in-progress columns
+  - `GetCompletedSortTime()` abstracts the fallback logic for cleaner sorting code
+  - Acceptance criteria fulfillment: updatedAt used for completed column, falls back to ModTime, updates automatically on file change
 ---

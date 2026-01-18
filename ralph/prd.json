@@ -345,6 +345,20 @@
       ],
       "priority": 25,
       "status": "complete"
+    },
+    {
+      "id": "PM-024",
+      "title": "Use updatedAt field for completed column ordering",
+      "description": "As a user, I want the completed column to order stories by their updatedAt field (if present in the JSON) so that the most recently completed stories appear at the top.",
+      "acceptanceCriteria": [
+        "If a userStory has an updatedAt field, use it for sorting in the completed column",
+        "Most recently updated stories appear at the top of the completed column",
+        "Falls back to existing sorting behavior if updatedAt is not present",
+        "Sorting updates automatically when prd.json files change"
+      ],
+      "priority": 26,
+      "status": "complete",
+      "updatedAt": "2026-01-18T14:30:22Z"
     }
   ]
 }

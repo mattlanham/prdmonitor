@@ -15,7 +15,8 @@ type UserStory struct {
 	Description        string   `json:"description"`
 	AcceptanceCriteria []string `json:"acceptanceCriteria"`
 	Priority           int      `json:"priority"`
-	Status             string   `json:"status"` // "incomplete", "in-progress", "complete"
+	Status             string   `json:"status"`    // "incomplete", "in-progress", "complete"
+	UpdatedAt          string   `json:"updatedAt"` // Optional ISO 8601 timestamp for sorting completed stories
 }
 
 // Status constants for user stories.

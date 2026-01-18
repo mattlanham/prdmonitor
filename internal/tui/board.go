@@ -128,7 +128,8 @@ func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string
 	// Sort cards within each column by modification time (most recently changed first)
 	incompleteCol.SortByModTime()
 	inProgressCol.SortByModTime()
-	completeCol.SortByModTime()
+	// Complete column uses updatedAt field (if present) for sorting, falls back to ModTime
+	completeCol.SortByUpdatedAt()
 
 	return &Board{
 		columns:      []*Column{incompleteCol, inProgressCol, completeCol},

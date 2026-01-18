@@ -5305,3 +5305,265 @@ func TestAnimationTickMsg_Type(t *testing.T) {
 		t.Error("AnimationTickMsg should implement tea.Msg")
 	}
 }
+
+// PM-024: Use updatedAt field for completed column ordering
+
+func TestCard_GetCompletedSortTime_UsesUpdatedAtIfSet(t *testing.T) {
+	now := time.Now()
+	modTime := now.Add(-1 * time.Hour) // 1 hour ago
+	updatedAt := now                   // Now
+
+	card := &Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001"},
+		ModTime:     modTime,
+		UpdatedAt:   updatedAt,
+	}
+
+	sortTime := card.GetCompletedSortTime()
+	if !sortTime.Equal(updatedAt) {
+		t.Errorf("expected GetCompletedSortTime to return UpdatedAt (%v), got %v", updatedAt, sortTime)
+	}
+}
+
+func TestCard_GetCompletedSortTime_FallsBackToModTime(t *testing.T) {
+	now := time.Now()
+
+	card := &Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001"},
+		ModTime:     now,
+		UpdatedAt:   time.Time{}, // Zero value - not set
+	}
+
+	sortTime := card.GetCompletedSortTime()
+	if !sortTime.Equal(now) {
+		t.Errorf("expected GetCompletedSortTime to return ModTime (%v), got %v", now, sortTime)
+	}
+}
+
+func TestColumn_SortByUpdatedAt(t *testing.T) {
+	col := NewColumn("Complete", "84")
+	now := time.Now()
+
+	// Add cards with different updatedAt times (in non-sorted order)
+	// Card 2: oldest updatedAt
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-002", Title: "Oldest Updated"},
+		ModTime:     now,
+		UpdatedAt:   now.Add(-2 * time.Hour),
+	})
+	// Card 1: newest updatedAt
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001", Title: "Newest Updated"},
+		ModTime:     now.Add(-5 * time.Hour), // ModTime is older
+		UpdatedAt:   now,                     // But updatedAt is newest
+	})
+	// Card 3: middle updatedAt
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-003", Title: "Middle Updated"},
+		ModTime:     now,
+		UpdatedAt:   now.Add(-1 * time.Hour),
+	})
+
+	// Sort by updatedAt
+	col.SortByUpdatedAt()
+
+	// Verify order: most recently updated first
+	if len(col.cards) != 3 {
+		t.Fatalf("expected 3 cards, got %d", len(col.cards))
+	}
+
+	expectedIDs := []string{"US-001", "US-003", "US-002"}
+	for i, expectedID := range expectedIDs {
+		if col.cards[i].Story.ID != expectedID {
+			t.Errorf("card %d: expected ID %q, got %q", i, expectedID, col.cards[i].Story.ID)
+		}
+	}
+}
+
+func TestColumn_SortByUpdatedAt_FallsBackToModTime(t *testing.T) {
+	col := NewColumn("Complete", "84")
+	now := time.Now()
+
+	// Card without updatedAt (falls back to ModTime)
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-002", Title: "No UpdatedAt"},
+		ModTime:     now.Add(-2 * time.Hour),
+		UpdatedAt:   time.Time{}, // Not set
+	})
+	// Card with updatedAt
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001", Title: "Has UpdatedAt"},
+		ModTime:     now.Add(-5 * time.Hour), // ModTime is oldest
+		UpdatedAt:   now,                     // But updatedAt is newest
+	})
+
+	col.SortByUpdatedAt()
+
+	// US-001 should be first (newer updatedAt beats US-002's ModTime)
+	if col.cards[0].Story.ID != "US-001" {
+		t.Errorf("expected US-001 first (has newest updatedAt), got %q", col.cards[0].Story.ID)
+	}
+	if col.cards[1].Story.ID != "US-002" {
+		t.Errorf("expected US-002 second (older ModTime fallback), got %q", col.cards[1].Story.ID)
+	}
+}
+
+func TestColumn_SortByUpdatedAt_EmptyColumn(t *testing.T) {
+	col := NewColumn("Complete", "84")
+
+	// Should not panic on empty column
+	col.SortByUpdatedAt()
+
+	if len(col.cards) != 0 {
+		t.Error("empty column should remain empty after sort")
+	}
+}
+
+func TestNewCardWithModTime_ParsesUpdatedAt(t *testing.T) {
+	now := time.Now()
+	story := model.UserStory{
+		ID:        "US-001",
+		Title:     "Test Story",
+		UpdatedAt: "2026-01-18T15:30:00Z",
+	}
+
+	card := NewCardWithModTime("TestProject", story, now)
+
+	if card.UpdatedAt.IsZero() {
+		t.Error("expected UpdatedAt to be parsed from story.UpdatedAt")
+	}
+
+	expectedTime, _ := time.Parse(time.RFC3339, "2026-01-18T15:30:00Z")
+	if !card.UpdatedAt.Equal(expectedTime) {
+		t.Errorf("expected UpdatedAt %v, got %v", expectedTime, card.UpdatedAt)
+	}
+}
+
+func TestNewCardWithModTime_ParsesUpdatedAt_MultipleFormats(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name       string
+		updatedAt  string
+		expectZero bool
+	}{
+		{"RFC3339", "2026-01-18T15:30:00Z", false},
+		{"RFC3339 with offset", "2026-01-18T15:30:00-08:00", false},
+		{"ISO without timezone", "2026-01-18T15:30:00", false},
+		{"ISO with space", "2026-01-18 15:30:00", false},
+		{"Date only", "2026-01-18", false},
+		{"Empty string", "", true},
+		{"Invalid format", "not-a-date", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			story := model.UserStory{
+				ID:        "US-001",
+				UpdatedAt: tc.updatedAt,
+			}
+			card := NewCardWithModTime("Project", story, now)
+
+			if tc.expectZero && !card.UpdatedAt.IsZero() {
+				t.Errorf("expected UpdatedAt to be zero for %q, got %v", tc.updatedAt, card.UpdatedAt)
+			}
+			if !tc.expectZero && card.UpdatedAt.IsZero() {
+				t.Errorf("expected UpdatedAt to be parsed for %q, but was zero", tc.updatedAt)
+			}
+		})
+	}
+}
+
+func TestNewBoard_CompleteColumnSortsByUpdatedAt(t *testing.T) {
+	now := time.Now()
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "First Completed", Status: model.StatusComplete, UpdatedAt: "2026-01-15T10:00:00Z"},
+					{ID: "US-002", Title: "Second Completed", Status: model.StatusComplete, UpdatedAt: "2026-01-18T15:00:00Z"}, // Most recent
+					{ID: "US-003", Title: "Third Completed", Status: model.StatusComplete, UpdatedAt: "2026-01-16T12:00:00Z"},
+				},
+			},
+			FilePath: "/test/prd.json",
+			ModTime:  now, // All from same file
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Complete column should be sorted by updatedAt (most recent first)
+	completeCol := board.columns[2]
+	if len(completeCol.cards) != 3 {
+		t.Fatalf("expected 3 cards in complete column, got %d", len(completeCol.cards))
+	}
+
+	expectedOrder := []string{"US-002", "US-003", "US-001"} // Sorted by updatedAt descending
+	for i, expectedID := range expectedOrder {
+		if completeCol.cards[i].Story.ID != expectedID {
+			t.Errorf("complete column card %d: expected %q, got %q", i, expectedID, completeCol.cards[i].Story.ID)
+		}
+	}
+}
+
+func TestNewBoard_IncompleteAndInProgressSortByModTime(t *testing.T) {
+	now := time.Now()
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Story 1", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project1/prd.json",
+			ModTime:  now.Add(-1 * time.Hour), // Older
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Project2",
+				UserStories: []model.UserStory{
+					{ID: "US-002", Title: "Story 2", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project2/prd.json",
+			ModTime:  now, // Newer
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Incomplete column should be sorted by ModTime (most recent first)
+	incompleteCol := board.columns[0]
+	if len(incompleteCol.cards) != 2 {
+		t.Fatalf("expected 2 cards in incomplete column, got %d", len(incompleteCol.cards))
+	}
+
+	// Project2 (newer ModTime) should be first
+	if incompleteCol.cards[0].Story.ID != "US-002" {
+		t.Errorf("expected US-002 first (newer ModTime), got %q", incompleteCol.cards[0].Story.ID)
+	}
+	if incompleteCol.cards[1].Story.ID != "US-001" {
+		t.Errorf("expected US-001 second (older ModTime), got %q", incompleteCol.cards[1].Story.ID)
+	}
+}
+
+func TestModel_UserStory_UpdatedAt_Field(t *testing.T) {
+	// Verify the model has the UpdatedAt field
+	story := model.UserStory{
+		ID:        "US-001",
+		UpdatedAt: "2026-01-18T15:30:00Z",
+	}
+
+	if story.UpdatedAt != "2026-01-18T15:30:00Z" {
+		t.Errorf("expected UpdatedAt field to be set, got %q", story.UpdatedAt)
+	}
+}

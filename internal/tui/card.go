@@ -15,6 +15,7 @@ type Card struct {
 	ProjectName string
 	Story       model.UserStory
 	ModTime     time.Time // Last modification time of the source prd.json file
+	UpdatedAt   time.Time // Parsed updatedAt time from the story (if provided)
 	Animating   bool      // Whether this card is currently animating (just moved columns)
 	AnimStart   time.Time // When the animation started
 }
@@ -78,6 +79,15 @@ func (c *Card) StartAnimation() {
 func (c *Card) StopAnimation() {
 	c.Animating = false
 	c.AnimStart = time.Time{}
+}
+
+// GetCompletedSortTime returns the time to use for sorting completed cards.
+// If UpdatedAt is set (non-zero), it returns UpdatedAt; otherwise it falls back to ModTime.
+func (c *Card) GetCompletedSortTime() time.Time {
+	if !c.UpdatedAt.IsZero() {
+		return c.UpdatedAt
+	}
+	return c.ModTime
 }
 
 // Render renders the card with the given width.
@@ -202,12 +212,32 @@ func NewCard(projectName string, story model.UserStory) *Card {
 }
 
 // NewCardWithModTime creates a new Card with the given project name, user story, and modification time.
+// If the story has an updatedAt field, it is parsed and stored for sorting completed cards.
 func NewCardWithModTime(projectName string, story model.UserStory, modTime time.Time) *Card {
-	return &Card{
+	card := &Card{
 		ProjectName: projectName,
 		Story:       story,
 		ModTime:     modTime,
 	}
+
+	// Parse updatedAt if present
+	if story.UpdatedAt != "" {
+		// Try parsing common ISO 8601 formats
+		formats := []string{
+			time.RFC3339,
+			"2006-01-02T15:04:05",
+			"2006-01-02 15:04:05",
+			"2006-01-02",
+		}
+		for _, format := range formats {
+			if t, err := time.Parse(format, story.UpdatedAt); err == nil {
+				card.UpdatedAt = t
+				break
+			}
+		}
+	}
+
+	return card
 }
 
 // RenderExpanded renders the card in expanded mode showing full details.

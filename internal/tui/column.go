@@ -159,6 +159,16 @@ func (c *Column) SortByModTime() {
 	})
 }
 
+// SortByUpdatedAt sorts cards by their updatedAt time (most recently updated first).
+// If a card has an updatedAt field set, that time is used; otherwise falls back to ModTime.
+// This is intended for the completed column to show most recently completed stories at top.
+func (c *Column) SortByUpdatedAt() {
+	sort.Slice(c.cards, func(i, j int) bool {
+		// Use GetCompletedSortTime which prefers updatedAt over ModTime
+		return c.cards[i].GetCompletedSortTime().After(c.cards[j].GetCompletedSortTime())
+	})
+}
+
 // SetSize updates the column dimensions.
 func (c *Column) SetSize(width, height int) {
 	c.width = width
