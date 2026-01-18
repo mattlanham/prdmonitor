@@ -222,6 +222,48 @@
         "Application remains responsive while scanning many subdirectories"
       ],
       "priority": 16,
+      "status": "in-progress"
+    },
+    {
+      "id": "PM-015",
+      "title": "ASCII art title header",
+      "description": "As a user, I want to see a stylish ASCII art title displaying 'PRDMonitor' at the top of the TUI so that the application has a distinctive and professional appearance.",
+      "acceptanceCriteria": [
+        "ASCII art title 'PRDMonitor' is displayed at the top of the TUI",
+        "Title uses a visually appealing ASCII font style",
+        "Title is centered or appropriately positioned",
+        "Title does not interfere with the Kanban board layout below it",
+        "Title adapts or truncates gracefully on narrow terminals"
+      ],
+      "priority": 17,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-016",
+      "title": "Equal padding on all sides of columns",
+      "description": "As a user, I want the padding around the Kanban columns to be equal on all sides so that the layout looks balanced and visually consistent.",
+      "acceptanceCriteria": [
+        "Padding on the left side matches the padding on the right side",
+        "Padding on the top matches the padding on the bottom",
+        "All three columns have consistent spacing between them",
+        "Layout maintains equal padding across different terminal sizes",
+        "Visual appearance is balanced and symmetrical"
+      ],
+      "priority": 18,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-017",
+      "title": "Filter by project",
+      "description": "As a user, I want to filter the Kanban board to show only user stories from specific projects so that I can focus on one project at a time.",
+      "acceptanceCriteria": [
+        "A filter control or keyboard shortcut allows selecting a project",
+        "When a project is selected, only stories from that project are displayed",
+        "An 'All Projects' option shows stories from all discovered projects",
+        "Current filter selection is displayed in the UI",
+        "Filter persists during the session but resets on restart"
+      ],
+      "priority": 19,
       "status": "incomplete"
     }
   ]
