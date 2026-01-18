@@ -7,6 +7,7 @@ import (
 
 	"lanham/prdmonitor/internal/parser"
 	"lanham/prdmonitor/internal/scanner"
+	"lanham/prdmonitor/internal/tui"
 )
 
 // Config holds the application configuration parsed from CLI arguments.
@@ -102,4 +103,10 @@ func main() {
 		totalStories += len(pr.PRD.UserStories)
 	}
 	fmt.Printf("Parsed %d project(s) with %d total user story(ies)\n", len(parseResults), totalStories)
+
+	// Launch the TUI
+	if err := tui.Run(parseResults); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+		os.Exit(1)
+	}
 }
