@@ -1,0 +1,69 @@
+{
+  "name": "Weather App",
+  "branchName": "feature/weather-app",
+  "userStories": [
+    {
+      "id": "WA-001",
+      "title": "Current weather display",
+      "description": "Show current temperature, conditions, and humidity for user's location",
+      "acceptanceCriteria": ["Display temperature in F/C", "Show weather icon", "Update every 30 minutes"],
+      "priority": 0,
+      "status": "complete",
+      "updatedAt": "2026-01-15T09:00:00Z"
+    },
+    {
+      "id": "WA-002",
+      "title": "Location search",
+      "description": "Allow users to search for weather in any city worldwide",
+      "acceptanceCriteria": ["Autocomplete suggestions", "Support city and zip code", "Remember recent searches"],
+      "priority": 1,
+      "status": "complete",
+      "updatedAt": "2026-01-16T14:30:00Z"
+    },
+    {
+      "id": "WA-003",
+      "title": "5-day forecast",
+      "description": "Display weather forecast for the next 5 days with high/low temps",
+      "acceptanceCriteria": ["Show daily high and low", "Weather icons for each day", "Precipitation probability"],
+      "priority": 2,
+      "status": "complete",
+      "updatedAt": "2026-01-17T11:00:00Z"
+    },
+    {
+      "id": "WA-004",
+      "title": "Weather alerts",
+      "description": "Push notifications for severe weather warnings in saved locations",
+      "acceptanceCriteria": ["Support multiple alert types", "User can toggle alerts", "Include safety recommendations"],
+      "priority": 3,
+      "status": "in-progress",
+      "updatedAt": "2026-01-18T08:00:00Z"
+    },
+    {
+      "id": "WA-005",
+      "title": "Hourly forecast view",
+      "description": "Scrollable hourly forecast for the next 24 hours",
+      "acceptanceCriteria": ["Temperature graph", "Precipitation timeline", "Wind speed indicators"],
+      "priority": 4,
+      "status": "incomplete",
+      "updatedAt": "2026-01-14T10:00:00Z"
+    },
+    {
+      "id": "WA-006",
+      "title": "Weather widgets",
+      "description": "Home screen widgets showing current conditions at a glance",
+      "acceptanceCriteria": ["Multiple widget sizes", "Customizable locations", "Low battery impact"],
+      "priority": 5,
+      "status": "incomplete",
+      "updatedAt": "2026-01-13T16:00:00Z"
+    },
+    {
+      "id": "WA-007",
+      "title": "Air quality index",
+      "description": "Display AQI and pollen counts for health-conscious users",
+      "acceptanceCriteria": ["Color-coded AQI scale", "Pollen breakdown", "Health recommendations"],
+      "priority": 6,
+      "status": "incomplete",
+      "updatedAt": "2026-01-12T09:00:00Z"
+    }
+  ]
+}

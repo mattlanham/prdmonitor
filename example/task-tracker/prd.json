@@ -1,0 +1,78 @@
+{
+  "name": "Task Tracker",
+  "branchName": "feature/task-tracker",
+  "userStories": [
+    {
+      "id": "TT-001",
+      "title": "Create and edit tasks",
+      "description": "Users can create tasks with title, description, and due date",
+      "acceptanceCriteria": ["Title required", "Optional description", "Date picker for due date"],
+      "priority": 0,
+      "status": "complete",
+      "updatedAt": "2026-01-10T10:00:00Z"
+    },
+    {
+      "id": "TT-002",
+      "title": "Task categories",
+      "description": "Organize tasks into customizable categories with colors",
+      "acceptanceCriteria": ["Create/edit/delete categories", "Assign color to category", "Filter by category"],
+      "priority": 1,
+      "status": "complete",
+      "updatedAt": "2026-01-11T14:00:00Z"
+    },
+    {
+      "id": "TT-003",
+      "title": "Due date reminders",
+      "description": "Push notifications for upcoming and overdue tasks",
+      "acceptanceCriteria": ["Configurable reminder times", "Snooze option", "Badge count for overdue"],
+      "priority": 2,
+      "status": "complete",
+      "updatedAt": "2026-01-12T09:30:00Z"
+    },
+    {
+      "id": "TT-004",
+      "title": "Task priorities",
+      "description": "Set priority levels (high, medium, low) for tasks",
+      "acceptanceCriteria": ["Visual priority indicators", "Sort by priority", "Filter by priority"],
+      "priority": 3,
+      "status": "complete",
+      "updatedAt": "2026-01-13T11:00:00Z"
+    },
+    {
+      "id": "TT-005",
+      "title": "Recurring tasks",
+      "description": "Support for daily, weekly, and monthly recurring tasks",
+      "acceptanceCriteria": ["Multiple recurrence patterns", "End date option", "Skip occurrence feature"],
+      "priority": 4,
+      "status": "in-progress",
+      "updatedAt": "2026-01-18T10:00:00Z"
+    },
+    {
+      "id": "TT-006",
+      "title": "Subtasks",
+      "description": "Break down tasks into smaller subtasks with progress tracking",
+      "acceptanceCriteria": ["Nested subtasks", "Progress percentage", "Collapse/expand subtasks"],
+      "priority": 5,
+      "status": "incomplete",
+      "updatedAt": "2026-01-09T15:00:00Z"
+    },
+    {
+      "id": "TT-007",
+      "title": "Task sharing",
+      "description": "Share tasks and lists with other users for collaboration",
+      "acceptanceCriteria": ["Invite by email", "Permission levels", "Real-time sync"],
+      "priority": 6,
+      "status": "incomplete",
+      "updatedAt": "2026-01-08T12:00:00Z"
+    },
+    {
+      "id": "TT-008",
+      "title": "Calendar integration",
+      "description": "Sync tasks with Google Calendar and Apple Calendar",
+      "acceptanceCriteria": ["Two-way sync", "Show tasks on calendar", "Import calendar events"],
+      "priority": 7,
+      "status": "incomplete",
+      "updatedAt": "2026-01-07T14:00:00Z"
+    }
+  ]
+}

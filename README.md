@@ -5,6 +5,8 @@ A terminal-based Kanban board that monitors directories for `prd.json` files and
 ![Go Version](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+![PRDMonitor Screenshot](prdmonitor@2x.png)
+
 ## Overview
 
 PRDMonitor provides a read-only dashboard for visualizing user stories across multiple projects. It automatically discovers `prd.json` files in your directory tree and displays them in a three-column Kanban board: **Incomplete**, **In Progress**, and **Complete**.
@@ -76,6 +78,9 @@ prdmonitor
 
 # Monitor a specific directory
 prdmonitor /path/to/projects
+
+# Try it with the included examples
+prdmonitor Example
 ```
 
 ### Keyboard Shortcuts
@@ -160,8 +165,13 @@ prdmonitor/
 │       └── help.go      # Help overlay
 ├── go.mod
 ├── go.sum
-└── ralph/
-    └── prd.json         # Example PRD file
+└── Example/             # Sample projects to try out
+    ├── weather-app/
+    │   └── prd.json
+    ├── task-tracker/
+    │   └── prd.json
+    └── recipe-finder/
+        └── prd.json
 ```
 
 ## Running Tests

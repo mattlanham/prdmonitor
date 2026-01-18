@@ -1,0 +1,105 @@
+{
+  "name": "Recipe Finder",
+  "branchName": "feature/recipe-finder",
+  "userStories": [
+    {
+      "id": "RF-001",
+      "title": "Recipe search",
+      "description": "Search recipes by name, ingredient, or cuisine type",
+      "acceptanceCriteria": ["Full-text search", "Filter by cuisine", "Sort by rating"],
+      "priority": 0,
+      "status": "complete",
+      "updatedAt": "2026-01-08T10:00:00Z"
+    },
+    {
+      "id": "RF-002",
+      "title": "Recipe detail view",
+      "description": "Display full recipe with ingredients, steps, and photos",
+      "acceptanceCriteria": ["Ingredient list with quantities", "Step-by-step instructions", "Recipe photos"],
+      "priority": 1,
+      "status": "complete",
+      "updatedAt": "2026-01-09T11:00:00Z"
+    },
+    {
+      "id": "RF-003",
+      "title": "Save favorite recipes",
+      "description": "Bookmark recipes to a personal favorites collection",
+      "acceptanceCriteria": ["Add/remove favorites", "Organize into collections", "Offline access"],
+      "priority": 2,
+      "status": "complete",
+      "updatedAt": "2026-01-10T14:00:00Z"
+    },
+    {
+      "id": "RF-004",
+      "title": "Shopping list generation",
+      "description": "Auto-generate shopping list from selected recipes",
+      "acceptanceCriteria": ["Combine duplicate ingredients", "Adjust for servings", "Check off items"],
+      "priority": 3,
+      "status": "complete",
+      "updatedAt": "2026-01-11T16:00:00Z"
+    },
+    {
+      "id": "RF-005",
+      "title": "Dietary filters",
+      "description": "Filter recipes by dietary restrictions (vegan, gluten-free, etc.)",
+      "acceptanceCriteria": ["Multiple filter options", "Save preferences", "Clear allergen warnings"],
+      "priority": 4,
+      "status": "complete",
+      "updatedAt": "2026-01-12T10:00:00Z"
+    },
+    {
+      "id": "RF-006",
+      "title": "Meal planning",
+      "description": "Plan weekly meals with calendar view and automatic shopping lists",
+      "acceptanceCriteria": ["Drag-drop calendar", "Weekly overview", "Nutritional summary"],
+      "priority": 5,
+      "status": "in-progress",
+      "updatedAt": "2026-01-18T09:00:00Z"
+    },
+    {
+      "id": "RF-007",
+      "title": "Cooking mode",
+      "description": "Hands-free cooking mode with voice commands and large text",
+      "acceptanceCriteria": ["Voice navigation", "Screen stays on", "Timer integration"],
+      "priority": 6,
+      "status": "in-progress",
+      "updatedAt": "2026-01-18T07:30:00Z"
+    },
+    {
+      "id": "RF-008",
+      "title": "Recipe scaling",
+      "description": "Adjust ingredient quantities for different serving sizes",
+      "acceptanceCriteria": ["Scale up or down", "Metric/imperial toggle", "Smart rounding"],
+      "priority": 7,
+      "status": "incomplete",
+      "updatedAt": "2026-01-06T13:00:00Z"
+    },
+    {
+      "id": "RF-009",
+      "title": "User reviews and ratings",
+      "description": "Allow users to rate and review recipes with photos",
+      "acceptanceCriteria": ["5-star rating", "Photo uploads", "Helpful vote system"],
+      "priority": 8,
+      "status": "incomplete",
+      "updatedAt": "2026-01-05T11:00:00Z"
+    },
+    {
+      "id": "RF-010",
+      "title": "Pantry inventory",
+      "description": "Track ingredients on hand and suggest recipes based on pantry",
+      "acceptanceCriteria": ["Barcode scanning", "Expiration tracking", "Recipe suggestions"],
+      "priority": 9,
+      "status": "incomplete",
+      "updatedAt": "2026-01-04T15:00:00Z"
+    },
+    {
+      "id": "RF-011",
+      "title": "Social sharing",
+      "description": "Share recipes to social media and with friends in-app",
+      "acceptanceCriteria": ["Share to Instagram/Facebook", "In-app messaging", "Recipe links"],
+      "priority": 10,
+      "status": "incomplete",
+      "updatedAt": "2026-01-03T10:00:00Z"
+    }
+  ]
+}
