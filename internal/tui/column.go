@@ -11,19 +11,33 @@ import (
 
 // Column represents a single column in the Kanban board.
 type Column struct {
-	title  string
-	cards  []*Card
-	color  lipgloss.Color
-	width  int
-	height int
+	title        string
+	cards        []*Card
+	color        lipgloss.Color
+	width        int
+	height       int
+	isSelected   bool // Whether this column is currently selected
+	selectedCard int  // Index of selected card (-1 if none)
 }
 
 // NewColumn creates a new column with the given title and color.
 func NewColumn(title string, color lipgloss.Color) *Column {
 	return &Column{
-		title: title,
-		cards: make([]*Card, 0),
-		color: color,
+		title:        title,
+		cards:        make([]*Card, 0),
+		color:        color,
+		isSelected:   false,
+		selectedCard: -1,
+	}
+}
+
+// SetSelected sets the selection state of this column and which card is selected.
+func (c *Column) SetSelected(isSelected bool, cardIndex int) {
+	c.isSelected = isSelected
+	if isSelected {
+		c.selectedCard = cardIndex
+	} else {
+		c.selectedCard = -1
 	}
 }
 
@@ -95,7 +109,9 @@ func (c *Column) View() string {
 		}
 
 		for i, card := range c.cards {
-			content.WriteString(card.Render(cardWidth))
+			// Check if this card is selected
+			isSelected := c.isSelected && i == c.selectedCard
+			content.WriteString(card.RenderSelected(cardWidth, isSelected))
 			if i < len(c.cards)-1 {
 				content.WriteString("\n")
 			}

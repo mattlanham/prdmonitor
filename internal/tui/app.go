@@ -29,6 +29,9 @@ type App struct {
 	watcher      *watcher.Watcher
 	parseResults []*parser.ParseResult
 	rootDir      string
+	showHelp     bool         // Whether to show the help overlay
+	expandedCard *Card        // Currently expanded card (nil if none)
+	helpOverlay  *HelpOverlay // Help overlay component
 }
 
 // NewApp creates a new App model with the given parsed PRD results.
@@ -38,6 +41,9 @@ func NewApp(parseResults []*parser.ParseResult, w *watcher.Watcher, rootDir stri
 		watcher:      w,
 		parseResults: parseResults,
 		rootDir:      rootDir,
+		showHelp:     false,
+		expandedCard: nil,
+		helpOverlay:  NewHelpOverlay(),
 	}
 }
 
@@ -71,13 +77,83 @@ func (a *App) listenForFileChanges() tea.Cmd {
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle escape key to close overlays
+		if msg.Type == tea.KeyEsc {
+			if a.expandedCard != nil {
+				a.expandedCard = nil
+				return a, nil
+			}
+			if a.showHelp {
+				a.showHelp = false
+				return a, nil
+			}
+			return a, nil
+		}
+
+		// Handle help overlay toggle
+		if msg.String() == "?" {
+			if a.expandedCard != nil {
+				// Close expanded card first
+				a.expandedCard = nil
+			}
+			a.showHelp = !a.showHelp
+			return a, nil
+		}
+
+		// If help is showing, only allow closing it
+		if a.showHelp {
+			return a, nil
+		}
+
+		// If card is expanded, only allow closing it
+		if a.expandedCard != nil {
+			switch msg.Type {
+			case tea.KeyEnter:
+				a.expandedCard = nil
+				return a, nil
+			}
+			switch msg.String() {
+			case " ":
+				a.expandedCard = nil
+				return a, nil
+			}
+			return a, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return a, tea.Quit
 
+		// Navigation: Arrow keys and hjkl
+		case "up", "k":
+			a.board.MoveUp()
+			return a, nil
+		case "down", "j":
+			a.board.MoveDown()
+			return a, nil
+		case "left", "h":
+			a.board.MoveLeft()
+			return a, nil
+		case "right", "l":
+			a.board.MoveRight()
+			return a, nil
+
+		// Tab cycles between columns
+		case "tab":
+			a.board.CycleColumn()
+			return a, nil
+
+		// Enter or space expands the selected card
+		case "enter", " ":
+			selectedCard := a.board.SelectedCard()
+			if selectedCard != nil {
+				a.expandedCard = selectedCard
+			}
+			return a, nil
+
 		// Explicitly ignore common edit keybindings to reinforce read-only mode
 		// Users must edit prd.json files directly to make changes
-		case "e", "i", "d", "x", "enter", "backspace", "delete":
+		case "e", "i", "d", "x", "backspace", "delete":
 			// No-op: board is view-only
 			return a, nil
 		}
@@ -86,6 +162,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 		a.board.SetSize(msg.Width, msg.Height)
+		a.helpOverlay.SetSize(msg.Width, msg.Height)
 
 	case FileChangedMsg:
 		// Re-parse the changed file and update the board
@@ -157,12 +234,12 @@ func (a *App) View() string {
 	// Board view
 	boardView := a.board.View()
 
-	// Status bar indicating view-only mode
+	// Status bar indicating view-only mode with navigation hints
 	statusBarStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
 		MarginTop(1)
 
-	statusBar := statusBarStyle.Render(ReadOnlyMessage + " | q: quit | ?: help")
+	statusBar := statusBarStyle.Render(ReadOnlyMessage + " | ↑↓←→/hjkl: navigate | Enter: expand | ?: help | q: quit")
 
 	// Help message for editing
 	helpMsgStyle := lipgloss.NewStyle().
@@ -174,7 +251,40 @@ func (a *App) View() string {
 	// Combine status bar and help message
 	footer := lipgloss.JoinVertical(lipgloss.Left, statusBar, helpMsg)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer)
+	// Base view
+	baseView := lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer)
+
+	// Overlay help if showing
+	if a.showHelp {
+		return a.renderWithOverlay(baseView, a.helpOverlay.View())
+	}
+
+	// Overlay expanded card if showing
+	if a.expandedCard != nil {
+		expandedWidth := a.width - 20
+		if expandedWidth < 50 {
+			expandedWidth = 50
+		}
+		if expandedWidth > 80 {
+			expandedWidth = 80
+		}
+		return a.renderWithOverlay(baseView, a.expandedCard.RenderExpanded(expandedWidth))
+	}
+
+	return baseView
+}
+
+// renderWithOverlay renders an overlay centered on top of the base view.
+func (a *App) renderWithOverlay(base, overlay string) string {
+	// Create a dimmed version of the base (we just show the overlay on top)
+	// For simplicity, we center the overlay on the screen
+
+	overlayStyle := lipgloss.NewStyle().
+		Width(a.width).
+		Height(a.height).
+		Align(lipgloss.Center, lipgloss.Center)
+
+	return overlayStyle.Render(overlay)
 }
 
 // Run starts the Bubble Tea program without file watching.

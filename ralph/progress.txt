@@ -86,6 +86,29 @@
 - Return `nil` cmd from Update() to indicate "no action" for ignored keys
 - `tea.KeyMsg` has specific types: `tea.KeyEnter`, `tea.KeyBackspace`, `tea.KeyDelete` vs. `tea.KeyRunes`
 
+### Keyboard Navigation Pattern
+- Navigation state tracked in Board: `selectedCol` (0-2) and `selectedCard` (index within column)
+- `MoveLeft/Right/Up/Down()` methods on Board handle navigation with clamping
+- `CycleColumn()` wraps around for Tab key behavior
+- `SelectedCard()` returns currently selected Card or nil for empty columns
+- Selection state flows: App → Board.View() sets Column selection → Column.View() highlights Card
+- Column stores `isSelected` and `selectedCard` for rendering
+- Card has `RenderSelected(width, isSelected)` for selection highlighting
+
+### Overlay Pattern (Help, Expanded Card)
+- App tracks overlay state: `showHelp bool`, `expandedCard *Card`
+- Overlays block navigation - check overlay state before processing navigation keys
+- Esc key closes overlays in priority order (expanded card first, then help)
+- ? key toggles help overlay (closes expanded card first if open)
+- `renderWithOverlay()` centers overlay content over base view
+- HelpOverlay component with `HelpShortcuts` array for documentation
+
+### Card Expansion Pattern
+- `RenderExpanded(width)` shows full card details: title, description, acceptance criteria, priority, status
+- Use `wrapText()` helper to wrap long text within width
+- Status colors: Green (84) for complete, Yellow (220) for in-progress, Red (203) for incomplete
+- Footer hint shows how to close expanded view
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -369,4 +392,51 @@
   - Existing implementation handles project name display (Card.ProjectName), status-based sorting (SortByPriority), and cross-project aggregation correctly
   - Test coverage for scale (20+ projects) is important for performance guarantees even when functionality already exists
   - When acceptance criteria seems already implemented, focus on adding comprehensive tests to verify all requirements
+---
+
+## 2026-01-18 - PM-012
+- **What was implemented:** Full keyboard navigation with arrow keys, hjkl vim-style keys, Tab column cycling, Enter/Space card expansion, ? help overlay, and Esc to close overlays
+- **Files changed:**
+  - `internal/tui/app.go` - Added showHelp, expandedCard, helpOverlay fields to App; enhanced Update() with navigation keybindings; updated View() to render overlays
+  - `internal/tui/board.go` - Added selectedCol, selectedCard fields; implemented MoveLeft/Right/Up/Down, CycleColumn, clampSelectedCard, SelectedCard methods
+  - `internal/tui/column.go` - Added isSelected, selectedCard fields; implemented SetSelected() for selection state
+  - `internal/tui/card.go` - Added RenderSelected(), SelectedCardStyle(), RenderExpanded(), wrapText(), itoa(), min() helper functions
+  - `internal/tui/help.go` - New file: HelpOverlay component with HelpShortcuts array and View() method
+  - `internal/tui/tui_test.go` - Added 35 new tests for keyboard navigation, help overlay, card expansion
+- **Tests added:**
+  - TestBoard_MoveRight/Left/UpDown - Tests directional navigation
+  - TestBoard_CycleColumn - Tests Tab wrapping through columns
+  - TestBoard_SelectedCard - Tests card selection and retrieval
+  - TestBoard_SelectedCard_EmptyColumn - Tests empty column handling
+  - TestBoard_NavigationClampsCardIndex - Tests index clamping when changing columns
+  - TestApp_Update_ArrowKeyNavigation - Tests arrow key handling
+  - TestApp_Update_HjklNavigation - Tests vim-style navigation
+  - TestApp_Update_TabCyclesColumns - Tests Tab key behavior
+  - TestApp_Update_EnterExpandsCard - Tests Enter key for card expansion
+  - TestApp_Update_SpaceExpandsCard - Tests Space key for card expansion
+  - TestApp_Update_EscClosesExpandedCard - Tests Esc closes expanded card
+  - TestApp_Update_QuestionMarkTogglesHelp - Tests ? toggles help overlay
+  - TestApp_Update_EscClosesHelp - Tests Esc closes help overlay
+  - TestApp_Update_HelpBlocksNavigation - Tests navigation blocked when help showing
+  - TestApp_View_ShowsHelpOverlay - Tests help overlay rendering
+  - TestApp_View_ShowsExpandedCard - Tests expanded card rendering
+  - TestNewHelpOverlay - Tests help overlay creation
+  - TestHelpOverlay_SetSize/View - Tests help overlay sizing and rendering
+  - TestHelpShortcuts_Contains_AllRequiredKeys - Verifies all shortcuts documented
+  - TestCard_RenderExpanded - Tests full card details view
+  - TestCard_RenderExpanded_EmptyAcceptanceCriteria - Tests edge case
+  - TestCard_RenderSelected - Tests selected card styling
+  - TestSelectedCardStyle - Tests selected style colors
+  - TestColumn_SetSelected - Tests column selection state
+  - TestWrapText/Itoa/Min - Tests helper functions
+- **Learnings:**
+  - Bubble Tea's `tea.KeyMsg` has both `Type` (for special keys like Enter, Esc, arrows) and `String()` (for printable characters)
+  - Arrow keys use `tea.KeyUp/Down/Left/Right` types, while letters use `tea.KeyRunes`
+  - Selection state should flow: App → Board → Column → Card for proper rendering
+  - Overlays (help, expanded card) should block navigation until closed
+  - Use `tea.KeyEsc` for closing overlays - it's the standard escape pattern
+  - Help overlay pattern: store shortcuts in a struct array for easy rendering and testing
+  - Card expansion shows full description, acceptance criteria, priority, and status
+  - Selection highlighting uses different border color (cyan) to distinguish from default (gray)
+  - Navigation clamping is important when columns have different card counts
 ---

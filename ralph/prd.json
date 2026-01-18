@@ -159,7 +159,7 @@
         "? displays a help overlay with available shortcuts"
       ],
       "priority": 11,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-013",

@@ -45,6 +45,26 @@ func (c *Card) Render(width int) string {
 	return c.RenderWithStyle(width, DefaultCardStyle())
 }
 
+// RenderSelected renders the card with selection highlighting.
+func (c *Card) RenderSelected(width int, isSelected bool) string {
+	style := DefaultCardStyle()
+	if isSelected {
+		style = SelectedCardStyle()
+	}
+	return c.RenderWithStyle(width, style)
+}
+
+// SelectedCardStyle returns the styling for a selected card.
+func SelectedCardStyle() CardStyle {
+	return CardStyle{
+		BorderColor:      lipgloss.Color("39"),  // Cyan border for selection
+		ProjectColor:     lipgloss.Color("39"),  // Cyan for project name
+		IDColor:          lipgloss.Color("205"), // Pink for ID (prominent)
+		TitleColor:       lipgloss.Color("255"), // White/bright for title
+		DescriptionColor: lipgloss.Color("247"), // Light gray for description
+	}
+}
+
 // RenderWithStyle renders the card with custom styling.
 func (c *Card) RenderWithStyle(width int, style CardStyle) string {
 	// Ensure minimum width for readable content
@@ -135,4 +155,167 @@ func NewCard(projectName string, story model.UserStory) *Card {
 		ProjectName: projectName,
 		Story:       story,
 	}
+}
+
+// RenderExpanded renders the card in expanded mode showing full details.
+func (c *Card) RenderExpanded(width int) string {
+	if width < 30 {
+		width = 30
+	}
+
+	style := DefaultCardStyle()
+
+	// Calculate content width (accounting for border and padding)
+	contentWidth := width - 6 // 2 for border, 4 for padding
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	// Card container style with box-drawing borders
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")). // Cyan border for expanded view
+		Width(width).
+		Padding(1, 2)
+
+	// Project name style
+	projectStyle := lipgloss.NewStyle().
+		Foreground(style.ProjectColor).
+		Bold(true)
+
+	// ID style
+	idStyle := lipgloss.NewStyle().
+		Foreground(style.IDColor).
+		Bold(true)
+
+	// Title style
+	titleStyle := lipgloss.NewStyle().
+		Foreground(style.TitleColor).
+		Bold(true)
+
+	// Description style
+	descStyle := lipgloss.NewStyle().
+		Foreground(style.DescriptionColor)
+
+	// Label style for sections
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("39")).
+		Bold(true)
+
+	// Status style
+	statusStyle := lipgloss.NewStyle()
+	switch c.Story.Status {
+	case "complete":
+		statusStyle = statusStyle.Foreground(lipgloss.Color("84")) // Green
+	case "in-progress":
+		statusStyle = statusStyle.Foreground(lipgloss.Color("220")) // Yellow
+	default:
+		statusStyle = statusStyle.Foreground(lipgloss.Color("203")) // Red
+	}
+
+	// Build card content
+	var content strings.Builder
+
+	// Header: Project name and Story ID
+	content.WriteString(projectStyle.Render(c.ProjectName))
+	content.WriteString("\n")
+	content.WriteString(idStyle.Render(c.Story.ID))
+	content.WriteString(" • ")
+	content.WriteString(statusStyle.Render(c.Story.Status))
+	content.WriteString("\n\n")
+
+	// Title
+	content.WriteString(titleStyle.Render(c.Story.Title))
+	content.WriteString("\n\n")
+
+	// Description (full, wrapped)
+	if c.Story.Description != "" {
+		content.WriteString(labelStyle.Render("Description:"))
+		content.WriteString("\n")
+		content.WriteString(descStyle.Render(wrapText(c.Story.Description, contentWidth)))
+		content.WriteString("\n\n")
+	}
+
+	// Acceptance Criteria
+	if len(c.Story.AcceptanceCriteria) > 0 {
+		content.WriteString(labelStyle.Render("Acceptance Criteria:"))
+		content.WriteString("\n")
+		for i, criterion := range c.Story.AcceptanceCriteria {
+			bullet := descStyle.Render("• " + wrapText(criterion, contentWidth-2))
+			content.WriteString(bullet)
+			if i < len(c.Story.AcceptanceCriteria)-1 {
+				content.WriteString("\n")
+			}
+		}
+		content.WriteString("\n\n")
+	}
+
+	// Priority
+	priorityStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("247"))
+	content.WriteString(priorityStyle.Render("Priority: "))
+	content.WriteString(priorityStyle.Render(strings.Repeat("★", min(c.Story.Priority+1, 5))))
+	content.WriteString(priorityStyle.Render(" (" + itoa(c.Story.Priority) + ")"))
+
+	// Footer hint
+	content.WriteString("\n\n")
+	footerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Italic(true)
+	content.WriteString(footerStyle.Render("Press Esc or Enter to close"))
+
+	return cardStyle.Render(content.String())
+}
+
+// wrapText wraps text to fit within the given width.
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	if len(text) <= width {
+		return text
+	}
+
+	var result strings.Builder
+	words := strings.Fields(text)
+	lineLen := 0
+
+	for i, word := range words {
+		if i > 0 {
+			if lineLen+1+len(word) > width {
+				result.WriteString("\n")
+				lineLen = 0
+			} else {
+				result.WriteString(" ")
+				lineLen++
+			}
+		}
+		result.WriteString(word)
+		lineLen += len(word)
+	}
+
+	return result.String()
+}
+
+// itoa converts an int to string (simple helper to avoid importing strconv).
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	if n < 0 {
+		return "-" + itoa(-n)
+	}
+	var digits []byte
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
+}
+
+// min returns the minimum of two ints.
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

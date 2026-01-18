@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"lanham/prdmonitor/internal/model"
 	"lanham/prdmonitor/internal/parser"
@@ -1234,5 +1235,883 @@ func TestMultiProject_CardsFromAllStatusesAggregated(t *testing.T) {
 	}
 	if !incompleteProjects["WebApp"] || !incompleteProjects["Database"] {
 		t.Error("Incomplete column should have cards from WebApp and Database")
+	}
+}
+
+// Keyboard navigation tests for PM-012
+
+func TestBoard_MoveRight(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+					{ID: "US-002", Status: model.StatusInProgress},
+					{ID: "US-003", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Initially at column 0
+	if board.SelectedColumn() != 0 {
+		t.Errorf("expected initial column 0, got %d", board.SelectedColumn())
+	}
+
+	// Move right to column 1
+	board.MoveRight()
+	if board.SelectedColumn() != 1 {
+		t.Errorf("expected column 1 after MoveRight, got %d", board.SelectedColumn())
+	}
+
+	// Move right to column 2
+	board.MoveRight()
+	if board.SelectedColumn() != 2 {
+		t.Errorf("expected column 2 after MoveRight, got %d", board.SelectedColumn())
+	}
+
+	// Try to move right past the last column (should stay at 2)
+	board.MoveRight()
+	if board.SelectedColumn() != 2 {
+		t.Errorf("expected column 2 (clamped), got %d", board.SelectedColumn())
+	}
+}
+
+func TestBoard_MoveLeft(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Move to column 2 first
+	board.MoveRight()
+	board.MoveRight()
+
+	// Move left to column 1
+	board.MoveLeft()
+	if board.SelectedColumn() != 1 {
+		t.Errorf("expected column 1 after MoveLeft, got %d", board.SelectedColumn())
+	}
+
+	// Move left to column 0
+	board.MoveLeft()
+	if board.SelectedColumn() != 0 {
+		t.Errorf("expected column 0 after MoveLeft, got %d", board.SelectedColumn())
+	}
+
+	// Try to move left past the first column (should stay at 0)
+	board.MoveLeft()
+	if board.SelectedColumn() != 0 {
+		t.Errorf("expected column 0 (clamped), got %d", board.SelectedColumn())
+	}
+}
+
+func TestBoard_MoveUpDown(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete, Priority: 0},
+					{ID: "US-002", Status: model.StatusIncomplete, Priority: 1},
+					{ID: "US-003", Status: model.StatusIncomplete, Priority: 2},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Initially at card 0
+	if board.SelectedCardIndex() != 0 {
+		t.Errorf("expected initial card 0, got %d", board.SelectedCardIndex())
+	}
+
+	// Move down
+	board.MoveDown()
+	if board.SelectedCardIndex() != 1 {
+		t.Errorf("expected card 1 after MoveDown, got %d", board.SelectedCardIndex())
+	}
+
+	board.MoveDown()
+	if board.SelectedCardIndex() != 2 {
+		t.Errorf("expected card 2 after MoveDown, got %d", board.SelectedCardIndex())
+	}
+
+	// Try to move down past the last card (should stay at 2)
+	board.MoveDown()
+	if board.SelectedCardIndex() != 2 {
+		t.Errorf("expected card 2 (clamped), got %d", board.SelectedCardIndex())
+	}
+
+	// Move up
+	board.MoveUp()
+	if board.SelectedCardIndex() != 1 {
+		t.Errorf("expected card 1 after MoveUp, got %d", board.SelectedCardIndex())
+	}
+
+	board.MoveUp()
+	if board.SelectedCardIndex() != 0 {
+		t.Errorf("expected card 0 after MoveUp, got %d", board.SelectedCardIndex())
+	}
+
+	// Try to move up past the first card (should stay at 0)
+	board.MoveUp()
+	if board.SelectedCardIndex() != 0 {
+		t.Errorf("expected card 0 (clamped), got %d", board.SelectedCardIndex())
+	}
+}
+
+func TestBoard_CycleColumn(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// Initially at column 0
+	if board.SelectedColumn() != 0 {
+		t.Errorf("expected initial column 0, got %d", board.SelectedColumn())
+	}
+
+	// Cycle through columns
+	board.CycleColumn()
+	if board.SelectedColumn() != 1 {
+		t.Errorf("expected column 1, got %d", board.SelectedColumn())
+	}
+
+	board.CycleColumn()
+	if board.SelectedColumn() != 2 {
+		t.Errorf("expected column 2, got %d", board.SelectedColumn())
+	}
+
+	// Should wrap around to column 0
+	board.CycleColumn()
+	if board.SelectedColumn() != 0 {
+		t.Errorf("expected column 0 (wrapped), got %d", board.SelectedColumn())
+	}
+}
+
+func TestBoard_SelectedCard(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "First Story", Status: model.StatusIncomplete},
+					{ID: "US-002", Title: "Second Story", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// First card should be selected
+	card := board.SelectedCard()
+	if card == nil {
+		t.Fatal("SelectedCard should not be nil")
+	}
+	if card.Story.ID != "US-001" {
+		t.Errorf("expected US-001, got %s", card.Story.ID)
+	}
+
+	// Move down and check
+	board.MoveDown()
+	card = board.SelectedCard()
+	if card == nil {
+		t.Fatal("SelectedCard should not be nil after MoveDown")
+	}
+	if card.Story.ID != "US-002" {
+		t.Errorf("expected US-002, got %s", card.Story.ID)
+	}
+}
+
+func TestBoard_SelectedCard_EmptyColumn(t *testing.T) {
+	// Create board with empty Incomplete column (only complete stories)
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Initial column (Incomplete) is empty
+	card := board.SelectedCard()
+	if card != nil {
+		t.Error("SelectedCard should be nil for empty column")
+	}
+
+	// Move to Complete column (has a card)
+	board.MoveRight()
+	board.MoveRight()
+	card = board.SelectedCard()
+	if card == nil {
+		t.Error("SelectedCard should not be nil in Complete column")
+	}
+}
+
+func TestBoard_NavigationClampsCardIndex(t *testing.T) {
+	// Create board where columns have different numbers of cards
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete, Priority: 0},
+					{ID: "US-002", Status: model.StatusIncomplete, Priority: 1},
+					{ID: "US-003", Status: model.StatusIncomplete, Priority: 2},
+					{ID: "US-004", Status: model.StatusInProgress}, // Only 1 card in this column
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Navigate to last card in Incomplete column (card index 2)
+	board.MoveDown()
+	board.MoveDown()
+	if board.SelectedCardIndex() != 2 {
+		t.Errorf("expected card 2, got %d", board.SelectedCardIndex())
+	}
+
+	// Move right to In Progress column (only 1 card)
+	// Card index should be clamped to 0
+	board.MoveRight()
+	if board.SelectedCardIndex() != 0 {
+		t.Errorf("expected card index clamped to 0, got %d", board.SelectedCardIndex())
+	}
+}
+
+func TestApp_Update_ArrowKeyNavigation(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+					{ID: "US-002", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Test arrow key navigation
+	tests := []struct {
+		key         string
+		expectedCol int
+		expectedRow int
+	}{
+		{"right", 1, 0},
+		{"left", 0, 0},
+		{"down", 0, 0}, // Only 1 card in Incomplete, stays at 0
+	}
+
+	for _, tt := range tests {
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)}
+		if tt.key == "up" {
+			msg = tea.KeyMsg{Type: tea.KeyUp}
+		} else if tt.key == "down" {
+			msg = tea.KeyMsg{Type: tea.KeyDown}
+		} else if tt.key == "left" {
+			msg = tea.KeyMsg{Type: tea.KeyLeft}
+		} else if tt.key == "right" {
+			msg = tea.KeyMsg{Type: tea.KeyRight}
+		}
+
+		newModel, _ := app.Update(msg)
+		app = newModel.(*App)
+	}
+}
+
+func TestApp_Update_HjklNavigation(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete, Priority: 0},
+					{ID: "US-002", Status: model.StatusIncomplete, Priority: 1},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Test j (down)
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedCardIndex() != 1 {
+		t.Errorf("expected card 1 after 'j', got %d", app.board.SelectedCardIndex())
+	}
+
+	// Test k (up)
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedCardIndex() != 0 {
+		t.Errorf("expected card 0 after 'k', got %d", app.board.SelectedCardIndex())
+	}
+
+	// Test l (right)
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedColumn() != 1 {
+		t.Errorf("expected column 1 after 'l', got %d", app.board.SelectedColumn())
+	}
+
+	// Test h (left)
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedColumn() != 0 {
+		t.Errorf("expected column 0 after 'h', got %d", app.board.SelectedColumn())
+	}
+}
+
+func TestApp_Update_TabCyclesColumns(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Test Tab cycles through columns
+	msg := tea.KeyMsg{Type: tea.KeyTab}
+
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedColumn() != 1 {
+		t.Errorf("expected column 1 after Tab, got %d", app.board.SelectedColumn())
+	}
+
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedColumn() != 2 {
+		t.Errorf("expected column 2 after Tab, got %d", app.board.SelectedColumn())
+	}
+
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+	if app.board.SelectedColumn() != 0 {
+		t.Errorf("expected column 0 after Tab (wrap), got %d", app.board.SelectedColumn())
+	}
+}
+
+func TestApp_Update_EnterExpandsCard(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Test Story", Description: "Full description here", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Initially no expanded card
+	if app.expandedCard != nil {
+		t.Error("expandedCard should be nil initially")
+	}
+
+	// Press Enter to expand
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if app.expandedCard == nil {
+		t.Error("expandedCard should not be nil after Enter")
+	}
+	if app.expandedCard.Story.ID != "US-001" {
+		t.Errorf("expected expanded card US-001, got %s", app.expandedCard.Story.ID)
+	}
+}
+
+func TestApp_Update_SpaceExpandsCard(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Test Story", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Press Space to expand
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if app.expandedCard == nil {
+		t.Error("expandedCard should not be nil after Space")
+	}
+}
+
+func TestApp_Update_EscClosesExpandedCard(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Expand a card first
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if app.expandedCard == nil {
+		t.Fatal("expandedCard should be set")
+	}
+
+	// Press Esc to close
+	msg = tea.KeyMsg{Type: tea.KeyEsc}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	if app.expandedCard != nil {
+		t.Error("expandedCard should be nil after Esc")
+	}
+}
+
+func TestApp_Update_QuestionMarkTogglesHelp(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Initially help is not shown
+	if app.showHelp {
+		t.Error("showHelp should be false initially")
+	}
+
+	// Press ? to show help
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if !app.showHelp {
+		t.Error("showHelp should be true after pressing ?")
+	}
+
+	// Press ? again to hide help
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	if app.showHelp {
+		t.Error("showHelp should be false after pressing ? again")
+	}
+}
+
+func TestApp_Update_EscClosesHelp(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Show help
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if !app.showHelp {
+		t.Fatal("showHelp should be true")
+	}
+
+	// Press Esc to close help
+	msg = tea.KeyMsg{Type: tea.KeyEsc}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	if app.showHelp {
+		t.Error("showHelp should be false after Esc")
+	}
+}
+
+func TestApp_Update_HelpBlocksNavigation(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+					{ID: "US-002", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	initialCol := app.board.SelectedColumn()
+
+	// Show help
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Try to navigate while help is showing
+	msg = tea.KeyMsg{Type: tea.KeyRight}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	// Column should not have changed
+	if app.board.SelectedColumn() != initialCol {
+		t.Error("navigation should be blocked while help is showing")
+	}
+}
+
+func TestApp_View_ShowsHelpOverlay(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	app.helpOverlay.SetSize(100, 40)
+
+	// Show help
+	app.showHelp = true
+
+	view := app.View()
+
+	// Check for help content
+	if !strings.Contains(view, "Keyboard Shortcuts") {
+		t.Error("help view should contain 'Keyboard Shortcuts' title")
+	}
+}
+
+func TestApp_View_ShowsExpandedCard(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Test Story", Description: "A detailed description", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Expand the card
+	app.expandedCard = app.board.SelectedCard()
+
+	view := app.View()
+
+	// Check for expanded card content
+	if !strings.Contains(view, "US-001") {
+		t.Error("expanded view should contain story ID")
+	}
+	if !strings.Contains(view, "A detailed description") {
+		t.Error("expanded view should contain full description")
+	}
+}
+
+// Help overlay tests
+
+func TestNewHelpOverlay(t *testing.T) {
+	h := NewHelpOverlay()
+	if h == nil {
+		t.Error("NewHelpOverlay should not return nil")
+	}
+}
+
+func TestHelpOverlay_SetSize(t *testing.T) {
+	h := NewHelpOverlay()
+	h.SetSize(100, 50)
+
+	if h.width != 100 {
+		t.Errorf("expected width 100, got %d", h.width)
+	}
+	if h.height != 50 {
+		t.Errorf("expected height 50, got %d", h.height)
+	}
+}
+
+func TestHelpOverlay_View(t *testing.T) {
+	h := NewHelpOverlay()
+	h.SetSize(100, 50)
+
+	view := h.View()
+
+	// Check for title
+	if !strings.Contains(view, "Keyboard Shortcuts") {
+		t.Error("help overlay should contain title")
+	}
+
+	// Check for some shortcuts (case-insensitive check)
+	viewLower := strings.ToLower(view)
+	if !strings.Contains(viewLower, "quit") {
+		t.Error("help overlay should mention quit")
+	}
+
+	// Check for close hint
+	if !strings.Contains(viewLower, "close") || !strings.Contains(view, "Esc") {
+		t.Error("help overlay should mention how to close")
+	}
+}
+
+func TestHelpShortcuts_Contains_AllRequiredKeys(t *testing.T) {
+	requiredKeys := []string{"↑", "↓", "←", "→", "Tab", "Enter", "Esc", "?", "q"}
+
+	for _, required := range requiredKeys {
+		found := false
+		for _, shortcut := range HelpShortcuts {
+			if strings.Contains(shortcut.Key, required) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("HelpShortcuts should contain %q", required)
+		}
+	}
+}
+
+// Card expanded view tests
+
+func TestCard_RenderExpanded(t *testing.T) {
+	card := NewCard("TestProject", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Story Title",
+		Description: "This is a detailed description of the story.",
+		Status:      model.StatusInProgress,
+		Priority:    2,
+		AcceptanceCriteria: []string{
+			"First criterion",
+			"Second criterion",
+		},
+	})
+
+	view := card.RenderExpanded(60)
+
+	// Check all expected content
+	if !strings.Contains(view, "TestProject") {
+		t.Error("expanded card should contain project name")
+	}
+	if !strings.Contains(view, "US-001") {
+		t.Error("expanded card should contain story ID")
+	}
+	if !strings.Contains(view, "Test Story Title") {
+		t.Error("expanded card should contain title")
+	}
+	if !strings.Contains(view, "This is a detailed description") {
+		t.Error("expanded card should contain full description")
+	}
+	if !strings.Contains(view, "in-progress") {
+		t.Error("expanded card should show status")
+	}
+	if !strings.Contains(view, "First criterion") {
+		t.Error("expanded card should show acceptance criteria")
+	}
+	if !strings.Contains(view, "Second criterion") {
+		t.Error("expanded card should show all acceptance criteria")
+	}
+	if !strings.Contains(view, "Priority") {
+		t.Error("expanded card should show priority")
+	}
+	if !strings.Contains(view, "Esc") || !strings.Contains(view, "close") {
+		t.Error("expanded card should show close hint")
+	}
+}
+
+func TestCard_RenderExpanded_EmptyAcceptanceCriteria(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:                 "US-001",
+		Title:              "Title",
+		Description:        "Description",
+		Status:             model.StatusIncomplete,
+		AcceptanceCriteria: []string{},
+	})
+
+	// Should not panic
+	view := card.RenderExpanded(60)
+
+	if view == "" {
+		t.Error("expanded card should render even with empty acceptance criteria")
+	}
+}
+
+func TestCard_RenderSelected(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:    "US-001",
+		Title: "Title",
+	})
+
+	// Render not selected
+	normalView := card.RenderSelected(40, false)
+
+	// Render selected
+	selectedView := card.RenderSelected(40, true)
+
+	// Both should contain the content
+	if !strings.Contains(normalView, "US-001") {
+		t.Error("normal view should contain ID")
+	}
+	if !strings.Contains(selectedView, "US-001") {
+		t.Error("selected view should contain ID")
+	}
+
+	// Selected view should have different styling (cyan border)
+	// We can't easily test ANSI colors, but we can verify both render without errors
+}
+
+func TestSelectedCardStyle(t *testing.T) {
+	style := SelectedCardStyle()
+
+	// Verify colors are set
+	if style.BorderColor == "" {
+		t.Error("SelectedCardStyle should have BorderColor")
+	}
+	if style.ProjectColor == "" {
+		t.Error("SelectedCardStyle should have ProjectColor")
+	}
+
+	// Border should be cyan (39)
+	if style.BorderColor != lipgloss.Color("39") {
+		t.Error("SelectedCardStyle border should be cyan (39)")
+	}
+}
+
+// Column selection state tests
+
+func TestColumn_SetSelected(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID: "US-001",
+		},
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID: "US-002",
+		},
+	})
+
+	// Initially not selected
+	if col.isSelected {
+		t.Error("column should not be selected initially")
+	}
+
+	// Set selected with card 1
+	col.SetSelected(true, 1)
+
+	if !col.isSelected {
+		t.Error("column should be selected")
+	}
+	if col.selectedCard != 1 {
+		t.Errorf("selectedCard should be 1, got %d", col.selectedCard)
+	}
+
+	// Deselect
+	col.SetSelected(false, 0)
+
+	if col.isSelected {
+		t.Error("column should not be selected after deselect")
+	}
+	if col.selectedCard != -1 {
+		t.Errorf("selectedCard should be -1 when not selected, got %d", col.selectedCard)
+	}
+}
+
+// Helper function tests
+
+func TestWrapText(t *testing.T) {
+	tests := []struct {
+		input    string
+		width    int
+		contains []string
+	}{
+		{"Hello world", 20, []string{"Hello world"}},
+		{"Hello world this is a test", 10, []string{"Hello", "world", "this"}},
+		{"", 10, []string{""}},
+		{"Short", 0, []string{"Short"}},
+	}
+
+	for _, tt := range tests {
+		result := wrapText(tt.input, tt.width)
+		for _, expected := range tt.contains {
+			if !strings.Contains(result, expected) && expected != "" {
+				t.Errorf("wrapText(%q, %d) should contain %q, got %q", tt.input, tt.width, expected, result)
+			}
+		}
+	}
+}
+
+func TestItoa(t *testing.T) {
+	tests := []struct {
+		input    int
+		expected string
+	}{
+		{0, "0"},
+		{1, "1"},
+		{10, "10"},
+		{123, "123"},
+		{-5, "-5"},
+	}
+
+	for _, tt := range tests {
+		result := itoa(tt.input)
+		if result != tt.expected {
+			t.Errorf("itoa(%d) = %q, expected %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestMin(t *testing.T) {
+	tests := []struct {
+		a, b     int
+		expected int
+	}{
+		{1, 2, 1},
+		{5, 3, 3},
+		{0, 0, 0},
+		{-1, 1, -1},
+	}
+
+	for _, tt := range tests {
+		result := min(tt.a, tt.b)
+		if result != tt.expected {
+			t.Errorf("min(%d, %d) = %d, expected %d", tt.a, tt.b, result, tt.expected)
+		}
 	}
 }

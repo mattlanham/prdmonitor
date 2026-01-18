@@ -10,9 +10,11 @@ import (
 
 // Board represents the Kanban board with three columns.
 type Board struct {
-	columns []*Column
-	width   int
-	height  int
+	columns      []*Column
+	width        int
+	height       int
+	selectedCol  int // Currently selected column index (0-2)
+	selectedCard int // Currently selected card index within the column
 }
 
 // NewBoard creates a new Board from the parsed PRD results.
@@ -46,8 +48,81 @@ func NewBoard(parseResults []*parser.ParseResult) *Board {
 	completeCol.SortByPriority()
 
 	return &Board{
-		columns: []*Column{incompleteCol, inProgressCol, completeCol},
+		columns:      []*Column{incompleteCol, inProgressCol, completeCol},
+		selectedCol:  0,
+		selectedCard: 0,
 	}
+}
+
+// MoveLeft moves the selection to the previous column.
+func (b *Board) MoveLeft() {
+	if b.selectedCol > 0 {
+		b.selectedCol--
+		// Clamp selected card to valid range for new column
+		b.clampSelectedCard()
+	}
+}
+
+// MoveRight moves the selection to the next column.
+func (b *Board) MoveRight() {
+	if b.selectedCol < len(b.columns)-1 {
+		b.selectedCol++
+		// Clamp selected card to valid range for new column
+		b.clampSelectedCard()
+	}
+}
+
+// MoveUp moves the selection to the previous card in the current column.
+func (b *Board) MoveUp() {
+	if b.selectedCard > 0 {
+		b.selectedCard--
+	}
+}
+
+// MoveDown moves the selection to the next card in the current column.
+func (b *Board) MoveDown() {
+	col := b.columns[b.selectedCol]
+	if b.selectedCard < len(col.cards)-1 {
+		b.selectedCard++
+	}
+}
+
+// CycleColumn cycles to the next column (wraps around).
+func (b *Board) CycleColumn() {
+	b.selectedCol = (b.selectedCol + 1) % len(b.columns)
+	b.clampSelectedCard()
+}
+
+// clampSelectedCard ensures selectedCard is within valid range for current column.
+func (b *Board) clampSelectedCard() {
+	col := b.columns[b.selectedCol]
+	if len(col.cards) == 0 {
+		b.selectedCard = 0
+	} else if b.selectedCard >= len(col.cards) {
+		b.selectedCard = len(col.cards) - 1
+	}
+}
+
+// SelectedCard returns the currently selected card, or nil if none.
+func (b *Board) SelectedCard() *Card {
+	if b.selectedCol < 0 || b.selectedCol >= len(b.columns) {
+		return nil
+	}
+	col := b.columns[b.selectedCol]
+	if b.selectedCard < 0 || b.selectedCard >= len(col.cards) {
+		return nil
+	}
+	return col.cards[b.selectedCard]
+}
+
+// SelectedColumn returns the index of the currently selected column.
+func (b *Board) SelectedColumn() int {
+	return b.selectedCol
+}
+
+// SelectedCardIndex returns the index of the currently selected card.
+func (b *Board) SelectedCardIndex() int {
+	return b.selectedCard
 }
 
 // SetSize updates the board dimensions and distributes width to columns.
@@ -76,6 +151,11 @@ func (b *Board) SetSize(width, height int) {
 func (b *Board) View() string {
 	if b.width == 0 {
 		return ""
+	}
+
+	// Set selection state on columns before rendering
+	for i, col := range b.columns {
+		col.SetSelected(i == b.selectedCol, b.selectedCard)
 	}
 
 	// Render each column
