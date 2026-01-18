@@ -3775,19 +3775,24 @@ func TestNewFilterOverlay(t *testing.T) {
 		t.Fatal("NewFilterOverlay should not return nil")
 	}
 
-	// Should have "All Projects" plus the 3 provided projects
-	if len(f.projects) != 4 {
-		t.Errorf("expected 4 projects (including All Projects), got %d", len(f.projects))
+	// Should have the 3 provided projects (no "All Projects" entry)
+	if len(f.projects) != 3 {
+		t.Errorf("expected 3 projects, got %d", len(f.projects))
 	}
 
-	// First item should be "All Projects"
-	if f.projects[0] != AllProjectsFilter {
-		t.Errorf("first project should be %q, got %q", AllProjectsFilter, f.projects[0])
+	// First item should be "Project1"
+	if f.projects[0] != "Project1" {
+		t.Errorf("first project should be %q, got %q", "Project1", f.projects[0])
 	}
 
-	// Initial selection should be 0 (All Projects)
-	if f.selectedIndex != 0 {
-		t.Errorf("initial selection should be 0, got %d", f.selectedIndex)
+	// Initial cursor should be 0
+	if f.CursorIndex() != 0 {
+		t.Errorf("initial cursor should be 0, got %d", f.CursorIndex())
+	}
+
+	// No projects should be selected initially
+	if f.FilterState().IsFiltering() {
+		t.Error("no projects should be selected initially")
 	}
 }
 
@@ -3795,37 +3800,27 @@ func TestFilterOverlay_MoveUpDown(t *testing.T) {
 	projectNames := []string{"Project1", "Project2"}
 	f := NewFilterOverlay(projectNames)
 
-	// Initial selection is 0
-	if f.SelectedIndex() != 0 {
-		t.Errorf("expected index 0, got %d", f.SelectedIndex())
+	// Initial cursor is 0
+	if f.CursorIndex() != 0 {
+		t.Errorf("expected index 0, got %d", f.CursorIndex())
 	}
 
 	// Move down
 	f.MoveDown()
-	if f.SelectedIndex() != 1 {
-		t.Errorf("expected index 1 after MoveDown, got %d", f.SelectedIndex())
+	if f.CursorIndex() != 1 {
+		t.Errorf("expected index 1 after MoveDown, got %d", f.CursorIndex())
 	}
 
+	// Move down past the end (should stay at 1 since only 2 projects)
 	f.MoveDown()
-	if f.SelectedIndex() != 2 {
-		t.Errorf("expected index 2 after MoveDown, got %d", f.SelectedIndex())
-	}
-
-	// Move down past the end (should stay at 2)
-	f.MoveDown()
-	if f.SelectedIndex() != 2 {
-		t.Errorf("expected index 2 (clamped), got %d", f.SelectedIndex())
+	if f.CursorIndex() != 1 {
+		t.Errorf("expected index 1 (clamped), got %d", f.CursorIndex())
 	}
 
 	// Move up
 	f.MoveUp()
-	if f.SelectedIndex() != 1 {
-		t.Errorf("expected index 1 after MoveUp, got %d", f.SelectedIndex())
-	}
-
-	f.MoveUp()
-	if f.SelectedIndex() != 0 {
-		t.Errorf("expected index 0 after MoveUp, got %d", f.SelectedIndex())
+	if f.CursorIndex() != 0 {
+		t.Errorf("expected index 0 after MoveUp, got %d", f.CursorIndex())
 	}
 
 	// Move up past the beginning (should stay at 0)
@@ -3839,21 +3834,22 @@ func TestFilterOverlay_SelectedProject(t *testing.T) {
 	projectNames := []string{"Frontend", "Backend"}
 	f := NewFilterOverlay(projectNames)
 
-	// Initial selection is "All Projects"
+	// Initial selection is "All Projects" (no projects selected)
 	if f.SelectedProject() != AllProjectsFilter {
 		t.Errorf("expected %q, got %q", AllProjectsFilter, f.SelectedProject())
 	}
 
-	// Move to "Frontend"
-	f.MoveDown()
+	// Toggle "Frontend" selection
+	f.ToggleCurrentProject()
 	if f.SelectedProject() != "Frontend" {
 		t.Errorf("expected 'Frontend', got %q", f.SelectedProject())
 	}
 
-	// Move to "Backend"
+	// Toggle "Backend" as well - now 2 selected, should return AllProjectsFilter
 	f.MoveDown()
-	if f.SelectedProject() != "Backend" {
-		t.Errorf("expected 'Backend', got %q", f.SelectedProject())
+	f.ToggleCurrentProject()
+	if f.SelectedProject() != AllProjectsFilter {
+		t.Errorf("expected %q (multiple selected), got %q", AllProjectsFilter, f.SelectedProject())
 	}
 }
 
@@ -3861,13 +3857,13 @@ func TestFilterOverlay_SelectProject(t *testing.T) {
 	projectNames := []string{"Project1", "Project2", "Project3"}
 	f := NewFilterOverlay(projectNames)
 
-	// Select a specific project
+	// SelectProject moves cursor to the project
 	found := f.SelectProject("Project2")
 	if !found {
 		t.Error("SelectProject should return true for existing project")
 	}
-	if f.SelectedProject() != "Project2" {
-		t.Errorf("expected 'Project2', got %q", f.SelectedProject())
+	if f.CursorIndex() != 1 {
+		t.Errorf("cursor should be at index 1 (Project2), got %d", f.CursorIndex())
 	}
 
 	// Select non-existent project
@@ -3876,13 +3872,10 @@ func TestFilterOverlay_SelectProject(t *testing.T) {
 		t.Error("SelectProject should return false for non-existent project")
 	}
 
-	// Select "All Projects"
+	// "All Projects" is no longer in the list, so SelectProject won't find it
 	found = f.SelectProject(AllProjectsFilter)
-	if !found {
-		t.Error("SelectProject should find 'All Projects'")
-	}
-	if f.SelectedProject() != AllProjectsFilter {
-		t.Errorf("expected %q, got %q", AllProjectsFilter, f.SelectedProject())
+	if found {
+		t.Error("SelectProject should return false for 'All Projects' (not in list)")
 	}
 }
 
@@ -3890,8 +3883,9 @@ func TestFilterOverlay_UpdateProjects(t *testing.T) {
 	// Start with some projects
 	f := NewFilterOverlay([]string{"Project1", "Project2"})
 
-	// Select Project2
+	// Select Project2 (move cursor and toggle)
 	f.SelectProject("Project2")
+	f.ToggleCurrentProject()
 	if f.SelectedProject() != "Project2" {
 		t.Fatal("setup: should have Project2 selected")
 	}
@@ -3907,7 +3901,7 @@ func TestFilterOverlay_UpdateProjects(t *testing.T) {
 	// Update with projects that don't include current selection
 	f.UpdateProjects([]string{"NewProject1", "NewProject2"})
 
-	// Should reset to "All Projects" since Project2 no longer exists
+	// Should clear selection since Project2 no longer exists (shows all)
 	if f.SelectedProject() != AllProjectsFilter {
 		t.Errorf("expected selection to reset to %q, got %q", AllProjectsFilter, f.SelectedProject())
 	}
@@ -3933,13 +3927,13 @@ func TestFilterOverlay_View(t *testing.T) {
 	view := f.View()
 
 	// Should contain title
-	if !strings.Contains(view, "Filter by Project") {
+	if !strings.Contains(view, "Filter Projects") {
 		t.Error("filter view should contain title")
 	}
 
-	// Should contain "All Projects"
-	if !strings.Contains(view, AllProjectsFilter) {
-		t.Error("filter view should contain 'All Projects' option")
+	// Should contain mode indicator
+	if !strings.Contains(view, "Mode:") {
+		t.Error("filter view should contain mode indicator")
 	}
 
 	// Should contain project names
@@ -3971,9 +3965,9 @@ func TestApp_ProjectFilter_InitialState(t *testing.T) {
 
 	app := NewApp(parseResults, nil, "")
 
-	// Initially filter should be "All Projects"
-	if app.projectFilter != AllProjectsFilter {
-		t.Errorf("expected initial filter to be %q, got %q", AllProjectsFilter, app.projectFilter)
+	// Initially no filter should be active (showing all)
+	if app.IsFilterActive() {
+		t.Error("no filter should be active initially")
 	}
 
 	// Filter overlay should be initialized
@@ -4130,20 +4124,24 @@ func TestApp_Update_FilterEnterSelectsProject(t *testing.T) {
 	app.board.SetSize(100, 40)
 	app.showFilter = true
 
-	// Initially at "All Projects", both cards should be visible
+	// Initially no filter active, both cards should be visible
 	if len(app.board.columns[0].cards) != 2 {
 		t.Fatalf("expected 2 cards initially, got %d", len(app.board.columns[0].cards))
 	}
 
-	// Navigate to "Project1" (index 1)
-	app.filterOverlay.MoveDown()
-	if app.filterOverlay.SelectedProject() != "Project1" {
-		t.Fatalf("expected 'Project1' selected, got %q", app.filterOverlay.SelectedProject())
+	// Toggle "Project1" selection with space (cursor is already at index 0 = Project1)
+	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	newModel, _ := app.Update(spaceMsg)
+	app = newModel.(*App)
+
+	// Filter should still be open
+	if !app.showFilter {
+		t.Error("showFilter should still be true after space (toggling selection)")
 	}
 
-	// Press Enter to select
-	msg := tea.KeyMsg{Type: tea.KeyEnter}
-	newModel, _ := app.Update(msg)
+	// Press Enter to apply and close filter
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	newModel, _ = app.Update(enterMsg)
 	app = newModel.(*App)
 
 	// Filter should be closed
@@ -4151,9 +4149,9 @@ func TestApp_Update_FilterEnterSelectsProject(t *testing.T) {
 		t.Error("showFilter should be false after Enter")
 	}
 
-	// Project filter should be set
-	if app.projectFilter != "Project1" {
-		t.Errorf("expected projectFilter 'Project1', got %q", app.projectFilter)
+	// Filter should be active
+	if !app.IsFilterActive() {
+		t.Error("filter should be active after selecting a project")
 	}
 
 	// Board should only show cards from Project1
@@ -4165,7 +4163,7 @@ func TestApp_Update_FilterEnterSelectsProject(t *testing.T) {
 	}
 }
 
-func TestApp_Update_FilterSpaceSelectsProject(t *testing.T) {
+func TestApp_Update_FilterSpaceTogglesProject(t *testing.T) {
 	parseResults := []*parser.ParseResult{
 		{
 			PRD: &model.PRD{
@@ -4184,22 +4182,19 @@ func TestApp_Update_FilterSpaceSelectsProject(t *testing.T) {
 	app.board.SetSize(100, 40)
 	app.showFilter = true
 
-	// Navigate to "ProjectA"
-	app.filterOverlay.MoveDown()
-
-	// Press Space to select
+	// Press Space to toggle ProjectA (cursor is at index 0)
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
 	newModel, _ := app.Update(msg)
 	app = newModel.(*App)
 
-	// Filter should be closed
-	if app.showFilter {
-		t.Error("showFilter should be false after Space")
+	// Filter should still be open (space toggles, doesn't close)
+	if !app.showFilter {
+		t.Error("showFilter should still be true after Space (toggle only)")
 	}
 
-	// Project filter should be set
-	if app.projectFilter != "ProjectA" {
-		t.Errorf("expected projectFilter 'ProjectA', got %q", app.projectFilter)
+	// ProjectA should now be selected in filter state
+	if !app.filterOverlay.FilterState().SelectedProjects["ProjectA"] {
+		t.Error("ProjectA should be selected after space toggle")
 	}
 }
 
@@ -4221,7 +4216,7 @@ func TestApp_View_ShowsFilterOverlay(t *testing.T) {
 	view := app.View()
 
 	// Should show filter overlay
-	if !strings.Contains(view, "Filter by Project") {
+	if !strings.Contains(view, "Filter Projects") {
 		t.Error("view should show filter overlay when showFilter is true")
 	}
 }
@@ -4242,14 +4237,14 @@ func TestApp_View_ShowsCurrentFilterInStatusBar(t *testing.T) {
 	app.height = 40
 	app.board.SetSize(100, 40)
 
-	// When filter is "All Projects", it should not be shown
+	// When no filter is active, it should not be shown
 	view := app.View()
 	if strings.Contains(view, "Filter:") && strings.Contains(view, AllProjectsFilter) {
 		t.Error("status bar should not explicitly show 'All Projects' filter")
 	}
 
-	// Set a specific project filter
-	app.projectFilter = "MyProject"
+	// Set a specific project filter via filter state
+	app.filterOverlay.FilterState().SelectedProjects["MyProject"] = true
 	app.rebuildBoard()
 
 	view = app.View()
@@ -4473,8 +4468,8 @@ func TestApp_HandleFileChange_UpdatesFilterOverlay(t *testing.T) {
 	app.board.SetSize(100, 40)
 
 	// Initially should have OldProject
-	if len(app.filterOverlay.Projects()) != 2 { // All Projects + OldProject
-		t.Fatalf("expected 2 projects initially, got %d", len(app.filterOverlay.Projects()))
+	if len(app.filterOverlay.Projects()) != 1 { // Just OldProject
+		t.Fatalf("expected 1 project initially, got %d", len(app.filterOverlay.Projects()))
 	}
 
 	// Simulate adding a new project
@@ -4487,9 +4482,9 @@ func TestApp_HandleFileChange_UpdatesFilterOverlay(t *testing.T) {
 	app.parseResults = append(app.parseResults, newResult)
 	app.filterOverlay.UpdateProjects(extractProjectNames(app.parseResults))
 
-	// Filter overlay should now have 3 projects
-	if len(app.filterOverlay.Projects()) != 3 { // All Projects + OldProject + NewProject
-		t.Errorf("expected 3 projects after add, got %d: %v", len(app.filterOverlay.Projects()), app.filterOverlay.Projects())
+	// Filter overlay should now have 2 projects
+	if len(app.filterOverlay.Projects()) != 2 { // OldProject + NewProject
+		t.Errorf("expected 2 projects after add, got %d: %v", len(app.filterOverlay.Projects()), app.filterOverlay.Projects())
 	}
 }
 
@@ -4521,7 +4516,7 @@ func TestApp_HandleFileChange_DeletedProjectResetsFilter(t *testing.T) {
 	app.board.SetSize(100, 40)
 
 	// Set filter to Project1
-	app.projectFilter = "Project1"
+	app.filterOverlay.FilterState().SelectedProjects["Project1"] = true
 	app.rebuildBoard()
 
 	// Simulate deletion of Project1
@@ -4531,9 +4526,9 @@ func TestApp_HandleFileChange_DeletedProjectResetsFilter(t *testing.T) {
 	}
 	app.handleFileChange(deleteMsg)
 
-	// Filter should reset to "All Projects" since Project1 no longer exists
-	if app.projectFilter != AllProjectsFilter {
-		t.Errorf("expected filter to reset to %q, got %q", AllProjectsFilter, app.projectFilter)
+	// Filter should be cleared since Project1 no longer exists
+	if app.filterOverlay.FilterState().SelectedProjects["Project1"] {
+		t.Error("deleted project should be removed from filter selection")
 	}
 }
 
@@ -4565,14 +4560,15 @@ func TestApp_View_StatusBarShowsFilterShortcut(t *testing.T) {
 }
 
 func TestFilterOverlay_View_EmptyProjects(t *testing.T) {
-	// Even with no projects, should still have "All Projects"
+	// With no projects, should show appropriate message
 	f := NewFilterOverlay([]string{})
 	f.SetSize(100, 50)
 
 	view := f.View()
 
-	if !strings.Contains(view, AllProjectsFilter) {
-		t.Error("filter view should always contain 'All Projects'")
+	// Should show that no projects are selected (showing all)
+	if !strings.Contains(view, "No projects selected") {
+		t.Error("filter view should indicate no projects selected")
 	}
 }
 
@@ -4595,8 +4591,7 @@ func TestApp_FilterPersistsDuringSession(t *testing.T) {
 	app.board.SetSize(100, 40)
 
 	// Set filter to Project1
-	app.projectFilter = "Project1"
-	app.filterOverlay.SelectProject("Project1")
+	app.filterOverlay.FilterState().SelectedProjects["Project1"] = true
 	app.rebuildBoard()
 
 	// Simulate some navigation
@@ -4604,8 +4599,8 @@ func TestApp_FilterPersistsDuringSession(t *testing.T) {
 	app.Update(msg)
 
 	// Filter should still be set
-	if app.projectFilter != "Project1" {
-		t.Errorf("filter should persist during session, got %q", app.projectFilter)
+	if !app.filterOverlay.FilterState().SelectedProjects["Project1"] {
+		t.Error("filter should persist during session")
 	}
 
 	// Simulate window resize
@@ -4614,8 +4609,8 @@ func TestApp_FilterPersistsDuringSession(t *testing.T) {
 	app = newModel.(*App)
 
 	// Filter should still be set after resize
-	if app.projectFilter != "Project1" {
-		t.Errorf("filter should persist after resize, got %q", app.projectFilter)
+	if !app.filterOverlay.FilterState().SelectedProjects["Project1"] {
+		t.Error("filter should persist after resize")
 	}
 }
 
@@ -4646,15 +4641,15 @@ func TestApp_IsFilterActive_AllProjects(t *testing.T) {
 	app.width = 100
 	app.height = 40
 
-	// Default filter is "All Projects", should not be active
+	// Default (no selection), should not be active
 	if app.IsFilterActive() {
-		t.Error("filter should not be active when set to 'All Projects'")
+		t.Error("filter should not be active when no projects selected")
 	}
 
-	// Empty filter should also not be active
-	app.projectFilter = ""
+	// Clear selection should also not be active
+	app.filterOverlay.ClearSelection()
 	if app.IsFilterActive() {
-		t.Error("filter should not be active when filter is empty")
+		t.Error("filter should not be active after clearing selection")
 	}
 }
 
@@ -4672,10 +4667,10 @@ func TestApp_IsFilterActive_SpecificProject(t *testing.T) {
 	app := NewApp(parseResults, nil, "")
 	app.width = 100
 	app.height = 40
-	app.projectFilter = "MyProject"
+	app.filterOverlay.FilterState().SelectedProjects["MyProject"] = true
 
 	if !app.IsFilterActive() {
-		t.Error("filter should be active when set to a specific project")
+		t.Error("filter should be active when a project is selected")
 	}
 }
 
@@ -4694,24 +4689,17 @@ func TestApp_RenderFilterIndicator_NotShownForAllProjects(t *testing.T) {
 	app.width = 100
 	app.height = 40
 
-	// Default filter is "All Projects"
+	// Default (no selection)
 	indicator := app.renderFilterIndicator()
 	if indicator != "" {
-		t.Errorf("indicator should be empty for 'All Projects', got %q", indicator)
+		t.Errorf("indicator should be empty when no filter active, got %q", indicator)
 	}
 
-	// Explicitly set to AllProjectsFilter
-	app.projectFilter = AllProjectsFilter
+	// Clear any selection
+	app.filterOverlay.ClearSelection()
 	indicator = app.renderFilterIndicator()
 	if indicator != "" {
-		t.Errorf("indicator should be empty for AllProjectsFilter, got %q", indicator)
-	}
-
-	// Empty filter
-	app.projectFilter = ""
-	indicator = app.renderFilterIndicator()
-	if indicator != "" {
-		t.Errorf("indicator should be empty for empty filter, got %q", indicator)
+		t.Errorf("indicator should be empty after clearing selection, got %q", indicator)
 	}
 }
 
@@ -4729,7 +4717,7 @@ func TestApp_RenderFilterIndicator_ShownForActiveFilter(t *testing.T) {
 	app := NewApp(parseResults, nil, "")
 	app.width = 100
 	app.height = 40
-	app.projectFilter = "MyProject"
+	app.filterOverlay.FilterState().SelectedProjects["MyProject"] = true
 
 	indicator := app.renderFilterIndicator()
 
@@ -4759,7 +4747,7 @@ func TestApp_View_ShowsFilterIndicatorInHeader_WhenFilterActive(t *testing.T) {
 	app.width = 100
 	app.height = 40
 	app.board.SetSize(100, 40)
-	app.projectFilter = "FilteredProject"
+	app.filterOverlay.FilterState().SelectedProjects["FilteredProject"] = true
 	app.rebuildBoard()
 
 	view := app.View()
@@ -4819,7 +4807,7 @@ func TestApp_View_FilterIndicatorDisappearsWhenCleared(t *testing.T) {
 	app.board.SetSize(100, 40)
 
 	// Set filter active
-	app.projectFilter = "MyProject"
+	app.filterOverlay.FilterState().SelectedProjects["MyProject"] = true
 	app.rebuildBoard()
 
 	view := app.View()
@@ -4827,8 +4815,8 @@ func TestApp_View_FilterIndicatorDisappearsWhenCleared(t *testing.T) {
 		t.Error("view should show filter indicator when filter is active")
 	}
 
-	// Clear filter to "All Projects"
-	app.projectFilter = AllProjectsFilter
+	// Clear filter
+	app.filterOverlay.ClearSelection()
 	app.rebuildBoard()
 
 	view = app.View()
@@ -4855,7 +4843,7 @@ func TestApp_View_FilterIndicatorVisibleInHeaderArea(t *testing.T) {
 	app.width = 100
 	app.height = 40
 	app.board.SetSize(100, 40)
-	app.projectFilter = "VisibleProject"
+	app.filterOverlay.FilterState().SelectedProjects["VisibleProject"] = true
 	app.rebuildBoard()
 
 	view := app.View()

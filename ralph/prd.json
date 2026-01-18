@@ -359,6 +359,36 @@
       "priority": 26,
       "status": "complete",
       "updatedAt": "2026-01-18T14:30:22Z"
+    },
+    {
+      "id": "PM-025",
+      "title": "Simplified file watching for large directories",
+      "description": "As a user, I want PRDMonitor to start without warnings when scanning large directory trees like ~/Developer so that the startup experience is clean and efficient.",
+      "acceptanceCriteria": [
+        "No warnings about directory watch limits when starting with large directories",
+        "Only existing prd.json files are watched for changes (not entire directory tree)",
+        "Startup message indicates restart is needed to detect new projects",
+        "Significantly reduced resource usage compared to recursive directory watching"
+      ],
+      "priority": 27,
+      "status": "complete",
+      "updatedAt": "2026-01-18T00:00:00Z"
+    },
+    {
+      "id": "PM-026",
+      "title": "Multi-select project filter with include/exclude mode",
+      "description": "As a user, I want to filter the Kanban board by selecting multiple projects and choose whether to include or exclude them so that I have flexible control over what projects are displayed.",
+      "acceptanceCriteria": [
+        "Filter overlay shows checkboxes next to each project for multi-select",
+        "Space key toggles project selection on/off",
+        "Tab key switches between 'include selected' and 'exclude selected' modes",
+        "Filter indicator shows count of selected projects or 'Excluding: X' in exclude mode",
+        "'c' key clears all selections to show all projects",
+        "No projects selected means all projects are shown"
+      ],
+      "priority": 28,
+      "status": "complete",
+      "updatedAt": "2026-01-18T00:00:00Z"
     }
   ]
 }

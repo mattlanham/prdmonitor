@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -71,7 +72,6 @@ type App struct {
 	helpOverlay   *HelpOverlay   // Help overlay component
 	showFilter    bool           // Whether to show the filter overlay
 	filterOverlay *FilterOverlay // Filter overlay component
-	projectFilter string         // Current project filter (empty or "All Projects" means no filter)
 }
 
 // NewApp creates a new App model with the given parsed PRD results.
@@ -89,7 +89,6 @@ func NewApp(parseResults []*parser.ParseResult, w *watcher.Watcher, rootDir stri
 		helpOverlay:   NewHelpOverlay(),
 		showFilter:    false,
 		filterOverlay: NewFilterOverlay(projectNames),
-		projectFilter: AllProjectsFilter, // Start with all projects
 	}
 }
 
@@ -113,8 +112,8 @@ func (a *App) rebuildBoard() bool {
 	// Capture current card positions before rebuild
 	oldPositions := a.board.GetCardPositions()
 
-	// Rebuild the board
-	a.board = NewBoardWithFilter(a.parseResults, a.projectFilter)
+	// Rebuild the board with current filter state
+	a.board = NewBoardWithFilterState(a.parseResults, a.filterOverlay.FilterState())
 	a.board.SetSize(a.width, a.height)
 
 	// Apply animations to cards that moved columns
@@ -226,8 +225,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.showFilter {
 			switch msg.Type {
 			case tea.KeyEnter:
-				// Select the current project and close filter
-				a.projectFilter = a.filterOverlay.SelectedProject()
+				// Close filter and apply
 				a.showFilter = false
 				a.rebuildBoard()
 				return a, nil
@@ -236,6 +234,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			case tea.KeyDown:
 				a.filterOverlay.MoveDown()
+				return a, nil
+			case tea.KeyTab:
+				// Toggle between include/exclude mode
+				a.filterOverlay.ToggleMode()
 				return a, nil
 			}
 			switch msg.String() {
@@ -246,10 +248,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.filterOverlay.MoveDown()
 				return a, nil
 			case " ":
-				// Select the current project and close filter
-				a.projectFilter = a.filterOverlay.SelectedProject()
-				a.showFilter = false
-				a.rebuildBoard()
+				// Toggle selection of current project
+				a.filterOverlay.ToggleCurrentProject()
+				return a, nil
+			case "c":
+				// Clear all selections
+				a.filterOverlay.ClearSelection()
+				return a, nil
+			case "tab":
+				// Toggle between include/exclude mode
+				a.filterOverlay.ToggleMode()
 				return a, nil
 			}
 			return a, nil
@@ -414,25 +422,8 @@ func (a *App) handleFileChange(msg FileChangedMsg) bool {
 			}
 		}
 
-		// Update project list in filter overlay
+		// Update project list in filter overlay (also removes deleted projects from selection)
 		a.filterOverlay.UpdateProjects(extractProjectNames(a.parseResults))
-
-		// If the filtered project was deleted, reset to all projects
-		projectStillExists := false
-		if a.projectFilter == AllProjectsFilter {
-			projectStillExists = true
-		} else {
-			for _, result := range a.parseResults {
-				if result.PRD.Name == a.projectFilter {
-					projectStillExists = true
-					break
-				}
-			}
-		}
-		if !projectStillExists {
-			a.projectFilter = AllProjectsFilter
-			a.filterOverlay.SelectProject(AllProjectsFilter)
-		}
 
 		// Rebuild the board with current filter (returns true if animations started)
 		return a.rebuildBoard()
@@ -558,8 +549,10 @@ func (a *App) renderASCIIArtHeader() string {
 // renderFilterIndicator renders the filter indicator badge when a filter is active.
 // Returns empty string when no filter is active (i.e., showing all projects).
 func (a *App) renderFilterIndicator() string {
-	// Don't show indicator when "All Projects" is selected or filter is empty
-	if a.projectFilter == "" || a.projectFilter == AllProjectsFilter {
+	fs := a.filterOverlay.FilterState()
+
+	// Don't show indicator when no projects are selected
+	if !fs.IsFiltering() {
 		return ""
 	}
 
@@ -570,12 +563,35 @@ func (a *App) renderFilterIndicator() string {
 		Bold(true).
 		Padding(0, 1)
 
-	return badgeStyle.Render(FilterIndicatorPrefix + a.projectFilter)
+	// Build the filter description
+	count := len(fs.SelectedProjects)
+	var filterText string
+	if fs.Mode == FilterModeInclude {
+		if count == 1 {
+			// Show the project name if only one selected
+			for p := range fs.SelectedProjects {
+				filterText = FilterIndicatorPrefix + p
+			}
+		} else {
+			filterText = FilterIndicatorPrefix + fmt.Sprintf("%d projects", count)
+		}
+	} else {
+		// Exclude mode
+		if count == 1 {
+			for p := range fs.SelectedProjects {
+				filterText = "Excluding: " + p
+			}
+		} else {
+			filterText = fmt.Sprintf("Excluding: %d projects", count)
+		}
+	}
+
+	return badgeStyle.Render(filterText)
 }
 
-// IsFilterActive returns true when a project filter is active (not "All Projects").
+// IsFilterActive returns true when a project filter is active.
 func (a *App) IsFilterActive() bool {
-	return a.projectFilter != "" && a.projectFilter != AllProjectsFilter
+	return a.filterOverlay.FilterState().IsFiltering()
 }
 
 // renderWithOverlay renders an overlay centered on top of the base view.

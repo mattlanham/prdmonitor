@@ -152,23 +152,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: Could not watch some files: %v\n", err)
 	}
 
-	// Watch the entire directory tree for new prd.json files
-	if err := w.WatchDirectory(config.RootDir); err != nil {
-		if err == watcher.ErrTooManyWatches {
-			fmt.Fprintf(os.Stderr, "Warning: Directory tree too large, watching %d directories (new file detection may be limited)\n", w.WatchCount())
-		} else {
-			fmt.Fprintf(os.Stderr, "Warning: Could not watch directory for new files: %v\n", err)
-		}
-	}
-
 	// Start the watcher in a goroutine
 	go w.Start()
 
-	if w.WatchLimitHit() {
-		fmt.Printf("Watching %d file(s) for changes (new file detection limited due to directory count)\n", len(result.Files))
-	} else {
-		fmt.Printf("Watching %d file(s) for changes (new files will be auto-detected)\n", len(result.Files))
-	}
+	fmt.Printf("Watching %d file(s) for changes (restart to detect new projects)\n", len(result.Files))
 
 	// Launch the TUI with file watching
 	if err := tui.RunWithWatcher(parseResults, w, config.RootDir); err != nil {

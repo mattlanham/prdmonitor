@@ -35,10 +35,22 @@ var HelpShortcuts = []struct {
 	{"→/l", "Move to right column"},
 	{"Tab", "Cycle between columns"},
 	{"Enter/Space", "Expand card details"},
-	{"f", "Filter by project"},
+	{"f", "Open project filter"},
 	{"Esc", "Close overlay/filter"},
 	{"?", "Toggle this help"},
 	{"q/Ctrl+C", "Quit application"},
+}
+
+// FilterHelpShortcuts contains keyboard shortcuts for the filter overlay.
+var FilterHelpShortcuts = []struct {
+	Key         string
+	Description string
+}{
+	{"Space", "Toggle project selection"},
+	{"Tab", "Switch include/exclude mode"},
+	{"c", "Clear all selections"},
+	{"Enter", "Apply filter and close"},
+	{"Esc/f", "Close filter"},
 }
 
 // View renders the help overlay.

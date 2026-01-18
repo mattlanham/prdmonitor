@@ -88,13 +88,28 @@ const allProjectsFilterValue = "All Projects"
 
 // NewBoard creates a new Board from the parsed PRD results with no filter.
 func NewBoard(parseResults []*parser.ParseResult) *Board {
-	return NewBoardWithFilter(parseResults, allProjectsFilterValue)
+	return NewBoardWithFilterState(parseResults, nil)
 }
 
 // NewBoardWithFilter creates a new Board from the parsed PRD results with an optional project filter.
 // If projectFilter is empty or "All Projects", all projects are shown.
 // Cards are sorted by modification time (most recently changed first).
+// Deprecated: Use NewBoardWithFilterState for include/exclude support.
 func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string) *Board {
+	// Convert old-style filter to FilterState for backwards compatibility
+	if projectFilter == "" || projectFilter == allProjectsFilterValue {
+		return NewBoardWithFilterState(parseResults, nil)
+	}
+	fs := NewFilterState()
+	fs.SelectedProjects[projectFilter] = true
+	fs.Mode = FilterModeInclude
+	return NewBoardWithFilterState(parseResults, fs)
+}
+
+// NewBoardWithFilterState creates a new Board from the parsed PRD results with a filter state.
+// If filterState is nil or has no selected projects, all projects are shown.
+// Cards are sorted by modification time (most recently changed first).
+func NewBoardWithFilterState(parseResults []*parser.ParseResult, filterState *FilterState) *Board {
 	// Create the three columns
 	incompleteCol := NewColumn("Incomplete", lipgloss.Color("203"))  // Red-ish
 	inProgressCol := NewColumn("In Progress", lipgloss.Color("220")) // Yellow
@@ -105,7 +120,7 @@ func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string
 		projectName := result.PRD.Name
 
 		// Skip projects that don't match the filter
-		if projectFilter != "" && projectFilter != allProjectsFilterValue && projectName != projectFilter {
+		if filterState != nil && !filterState.ShouldShowProject(projectName) {
 			continue
 		}
 
