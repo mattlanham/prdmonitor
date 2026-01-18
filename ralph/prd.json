@@ -209,7 +209,7 @@
         "Cards and column borders have appropriate margin from the right edge"
       ],
       "priority": 15,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "BUG-003",

@@ -300,8 +300,12 @@ func (a *App) View() string {
 	// Combine status bar and help message
 	footer := lipgloss.JoinVertical(lipgloss.Left, statusBar, helpMsg)
 
-	// Base view
-	baseView := lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer)
+	// Base view with right-side padding
+	// Apply padding to the entire content area for breathing room from terminal edge
+	paddedStyle := lipgloss.NewStyle().
+		PaddingRight(2)
+
+	baseView := paddedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer))
 
 	// Overlay help if showing
 	if a.showHelp {

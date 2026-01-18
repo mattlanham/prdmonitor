@@ -163,7 +163,8 @@ func (b *Board) SetSize(width, height int) {
 	}
 
 	// Distribute width evenly across columns with some padding
-	columnWidth := (width - 4) / 3 // 4 for margins between columns
+	// Reserve 6 total: 4 for margins between columns + 2 for right-side padding
+	columnWidth := (width - 6) / 3
 	if columnWidth < 20 {
 		columnWidth = 20
 	}

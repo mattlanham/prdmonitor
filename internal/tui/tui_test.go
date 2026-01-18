@@ -2967,3 +2967,116 @@ func TestApp_View_HeaderHasBreathingRoom(t *testing.T) {
 		t.Error("header text should be present in the view")
 	}
 }
+
+// Right-side padding tests for BUG-002
+
+func TestBoard_SetSize_AccountsForRightPadding(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// Set size
+	board.SetSize(120, 40)
+
+	// With right padding of 2, the total column width calculation should account for:
+	// - 4 for margins between columns
+	// - 2 for right-side padding
+	// So column width = (120 - 6) / 3 = 38
+	expectedColumnWidth := (120 - 6) / 3
+
+	for _, col := range board.columns {
+		if col.width != expectedColumnWidth {
+			t.Errorf("column width %d should be %d (accounting for right padding)", col.width, expectedColumnWidth)
+		}
+	}
+}
+
+func TestBoard_SetSize_RightPaddingConsistentAcrossSizes(t *testing.T) {
+	// Test that right padding calculation is consistent across different terminal sizes
+	terminalSizes := []struct {
+		width  int
+		height int
+	}{
+		{80, 24},
+		{120, 40},
+		{200, 60},
+	}
+
+	for _, size := range terminalSizes {
+		board := NewBoard([]*parser.ParseResult{})
+		board.SetSize(size.width, size.height)
+
+		// Column width should be (width - 6) / 3 where 6 = 4 (margins) + 2 (right padding)
+		expectedColumnWidth := (size.width - 6) / 3
+		if expectedColumnWidth < 20 {
+			expectedColumnWidth = 20 // Minimum column width
+		}
+
+		for i, col := range board.columns {
+			if col.width != expectedColumnWidth {
+				t.Errorf("at size %dx%d: column %d width %d should be %d",
+					size.width, size.height, i, col.width, expectedColumnWidth)
+			}
+		}
+	}
+}
+
+func TestApp_View_HasRightPaddingStyle(t *testing.T) {
+	// This test verifies that the view includes right padding by checking
+	// that the content area is narrower than the total terminal width
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Story 1", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 120
+	app.height = 40
+	app.board.SetSize(120, 40)
+
+	view := app.View()
+
+	// Verify view is rendered (not empty or just loading)
+	if view == "" || view == "Loading..." {
+		t.Error("view should be rendered with content")
+	}
+
+	// The board column widths should account for right padding
+	// Each column should be (120 - 6) / 3 = 38 chars wide
+	// This ensures content doesn't extend to the right edge
+	totalColumnWidth := 0
+	for _, col := range app.board.columns {
+		totalColumnWidth += col.width
+	}
+
+	// Total column width + margins + right padding should not exceed terminal width
+	// Columns: 38*3 = 114, plus some borders/margins, should leave room for right padding
+	maxExpectedWidth := 120 - 2 // Terminal width minus right padding
+	if totalColumnWidth > maxExpectedWidth {
+		t.Errorf("total column width %d exceeds expected max %d (should leave room for right padding)",
+			totalColumnWidth, maxExpectedWidth)
+	}
+}
+
+func TestApp_View_RightPaddingColumnCalculation(t *testing.T) {
+	// Verify the column width calculation accounts for right-side padding
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// With width=100 and right padding=2 (in addition to 4 for inter-column margins)
+	// Column width = (100 - 6) / 3 = 31.33 -> 31
+	expectedColWidth := (100 - 6) / 3
+
+	for i, col := range app.board.columns {
+		if col.width != expectedColWidth {
+			t.Errorf("column %d: width %d should be %d (accounting for right padding)", i, col.width, expectedColWidth)
+		}
+	}
+}
