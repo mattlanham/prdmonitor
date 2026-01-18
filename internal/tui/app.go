@@ -12,31 +12,32 @@ import (
 )
 
 // ASCIIArtTitle is the ASCII art representation of "PRD Monitor".
-// Uses a clean isometric/3D style for a distinctive professional appearance.
+// Uses a compact, legible style to leave more space for the Kanban board.
 var ASCIIArtTitle = []string{
-	" ██████╗ ██████╗ ██████╗    ███╗   ███╗ ██████╗ ███╗   ██╗██╗████████╗ ██████╗ ██████╗ ",
-	" ██╔══██╗██╔══██╗██╔══██╗   ████╗ ████║██╔═══██╗████╗  ██║██║╚══██╔══╝██╔═══██╗██╔══██╗",
-	" ██████╔╝██████╔╝██║  ██║   ██╔████╔██║██║   ██║██╔██╗ ██║██║   ██║   ██║   ██║██████╔╝",
-	" ██╔═══╝ ██╔══██╗██║  ██║   ██║╚██╔╝██║██║   ██║██║╚██╗██║██║   ██║   ██║   ██║██╔══██╗",
-	" ██║     ██║  ██║██████╔╝   ██║ ╚═╝ ██║╚██████╔╝██║ ╚████║██║   ██║   ╚██████╔╝██║  ██║",
-	" ╚═╝     ╚═╝  ╚═╝╚═════╝    ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝",
+	"╔═╗╦═╗╔╦╗  ╔╦╗╔═╗╔╗╔╦╔╦╗╔═╗╦═╗",
+	"╠═╝╠╦╝ ║║  ║║║║ ║║║║║ ║ ║ ║╠╦╝",
+	"╩  ╩╚══╩╝  ╩ ╩╚═╝╝╚╝╩ ╩ ╚═╝╩╚═",
 }
 
 // ASCIIArtWidth is the visual width of the ASCII art title in rune characters.
 // Note: Byte length varies due to Unicode box-drawing characters.
-const ASCIIArtWidth = 87
+const ASCIIArtWidth = 30
 
 // MinWidthForASCIIArt is the minimum terminal width to display the ASCII art.
 // Below this width, a simple text header is shown instead.
-const MinWidthForASCIIArt = 95
+const MinWidthForASCIIArt = 40
 
 // Padding constants for equal spacing on all sides of the content area.
 // These ensure a balanced and visually consistent layout.
 const (
 	HorizontalPadding = 2 // Left and right padding (equal)
-	TopPadding        = 2 // Top padding (from header PaddingTop) - enough for logo not to be cut off
-	BottomPadding     = 2 // Bottom padding (equal to top)
+	TopPadding        = 1 // Top padding (from header PaddingTop) - visible spacing above logo
+	BottomPadding     = 1 // Bottom padding (equal to top for balance)
 )
+
+// ASCIIArtLines is the number of lines in the ASCII art logo.
+// Used for height calculations in board.go.
+const ASCIIArtLines = 3
 
 // ReadOnlyMessage is displayed in the status bar to indicate view-only mode.
 const ReadOnlyMessage = "VIEW-ONLY"

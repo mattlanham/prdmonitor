@@ -2956,8 +2956,8 @@ func TestApp_View_HeaderHasBreathingRoom(t *testing.T) {
 	view := app.View()
 
 	// The header should not be at the very first character (has top padding)
-	// With isometric 3D ASCII art, we look for block characters
-	headerText := "██████╗" // Distinctive block pattern from first line
+	// With compact ASCII art, we look for box-drawing characters
+	headerText := "╔═╗╦═╗" // Distinctive pattern from first line of compact logo
 	headerIndex := strings.Index(view, headerText)
 
 	if headerIndex == 0 {
@@ -3091,9 +3091,9 @@ func TestASCIIArtTitle_IsSet(t *testing.T) {
 		t.Error("ASCIIArtTitle should not be empty")
 	}
 
-	// Should have 6 lines for the isometric/3D ASCII art style
-	if len(ASCIIArtTitle) != 6 {
-		t.Errorf("expected 6 lines of ASCII art, got %d", len(ASCIIArtTitle))
+	// Should have 3 lines for the compact ASCII art style (PM-020)
+	if len(ASCIIArtTitle) != 3 {
+		t.Errorf("expected 3 lines of ASCII art, got %d", len(ASCIIArtTitle))
 	}
 }
 
@@ -3136,14 +3136,14 @@ func TestApp_View_ShowsASCIIArtTitle_WideTerminal(t *testing.T) {
 	view := app.View()
 
 	// Check that at least part of the ASCII art is present
-	// The isometric 3D style uses block characters
-	if !strings.Contains(view, "██████╗") {
+	// The compact style uses box-drawing characters
+	if !strings.Contains(view, "╔═╗") {
 		t.Error("wide terminal should show ASCII art title")
 	}
 
-	// Should also contain characteristic parts of the art
-	if !strings.Contains(view, "╚═╝") {
-		t.Error("ASCII art should have all six lines visible")
+	// Should also contain characteristic parts of the compact art
+	if !strings.Contains(view, "╩╚═") {
+		t.Error("ASCII art should have all lines visible")
 	}
 }
 
@@ -3161,8 +3161,8 @@ func TestApp_View_ShowsSimpleTitle_NarrowTerminal(t *testing.T) {
 		t.Error("narrow terminal should still show PRD Monitor title")
 	}
 
-	// Should NOT contain ASCII art characters (the block characters used in 3D style)
-	if strings.Contains(view, "██████╗") {
+	// Should NOT contain ASCII art characters (the box-drawing chars used in compact style)
+	if strings.Contains(view, "╔═╗╦═╗") {
 		t.Error("narrow terminal should not show ASCII art, should use simple text")
 	}
 }
@@ -3176,8 +3176,8 @@ func TestApp_View_ASCIIArtCentered_WideTerminal(t *testing.T) {
 
 	view := app.View()
 
-	// Check that ASCII art is present (using block characters from 3D style)
-	if !strings.Contains(view, "██████╗") {
+	// Check that ASCII art is present (using box-drawing characters from compact style)
+	if !strings.Contains(view, "╔═╗╦═╗") {
 		t.Error("wide terminal should show ASCII art")
 	}
 
@@ -3193,8 +3193,8 @@ func TestApp_RenderHeader_ReturnsASCIIArt_WideTerminal(t *testing.T) {
 
 	header := app.renderHeader()
 
-	// Header should contain ASCII art (using block characters from 3D style)
-	if !strings.Contains(header, "██████╗") {
+	// Header should contain ASCII art (using box-drawing characters from compact style)
+	if !strings.Contains(header, "╔═╗╦═╗") {
 		t.Error("renderHeader should return ASCII art for wide terminal")
 	}
 }
@@ -3212,8 +3212,8 @@ func TestApp_RenderHeader_ReturnsSimpleText_NarrowTerminal(t *testing.T) {
 		t.Error("renderHeader should return PRD Monitor text for narrow terminal")
 	}
 
-	// Should NOT contain ASCII art block characters
-	if strings.Contains(header, "██████╗") {
+	// Should NOT contain ASCII art box-drawing characters
+	if strings.Contains(header, "╔═╗╦═╗") {
 		t.Error("renderHeader should not return ASCII art for narrow terminal")
 	}
 }
@@ -3234,15 +3234,15 @@ func TestApp_RenderASCIIArtHeader_ContainsAllLines(t *testing.T) {
 }
 
 func TestBoard_SetSize_AccountsForASCIIArtHeight_WideTerminal(t *testing.T) {
-	// When terminal is wide, ASCII art uses more vertical space
+	// When terminal is wide, ASCII art uses vertical space
 	board := NewBoard([]*parser.ParseResult{})
 	board.SetSize(100, 40) // Wide terminal
 
-	// With ASCII art: 6 lines + TopPadding (2) + 1 margin = 9 lines header
+	// With compact ASCII art: 3 lines + TopPadding (1) + 1 margin = 5 lines header
 	// Footer: 2 lines + 1 margin = 3 lines
-	// BottomPadding: 2 lines
-	// Total reserved: 6 + TopPadding + 1 + 3 + BottomPadding = 14 lines
-	expectedMaxHeight := 40 - 14
+	// BottomPadding: 1 line
+	// Total reserved: 3 + TopPadding + 1 + 3 + BottomPadding = 9 lines
+	expectedMaxHeight := 40 - 9
 
 	for _, col := range board.columns {
 		if col.height > expectedMaxHeight {
@@ -3256,11 +3256,11 @@ func TestBoard_SetSize_AccountsForSimpleHeaderHeight_NarrowTerminal(t *testing.T
 	board := NewBoard([]*parser.ParseResult{})
 	board.SetSize(MinWidthForASCIIArt-10, 40) // Narrow terminal
 
-	// With simple header: 1 line + TopPadding (2) + 1 margin = 4 lines header
+	// With simple header: 1 line + TopPadding (1) + 1 margin = 3 lines header
 	// Footer: 2 lines + 1 margin = 3 lines
-	// BottomPadding: 2 lines
-	// Total reserved: 1 + TopPadding + 1 + 3 + BottomPadding = 9 lines
-	expectedMaxHeight := 40 - 9
+	// BottomPadding: 1 line
+	// Total reserved: 1 + TopPadding + 1 + 3 + BottomPadding = 7 lines
+	expectedMaxHeight := 40 - 7
 
 	for _, col := range board.columns {
 		if col.height > expectedMaxHeight {
@@ -3274,16 +3274,16 @@ func TestASCIIArtTitle_ContainsPRDMonitor(t *testing.T) {
 	// This is a visual check - the letters P R D M o n i t o r should be discernible
 	fullArt := strings.Join(ASCIIArtTitle, "")
 
-	// The art uses block characters in an isometric/3D style
-	// Check for distinctive block patterns
-	if !strings.Contains(fullArt, "██████╗") || !strings.Contains(fullArt, "╚═╝") {
-		t.Error("ASCII art should contain characteristic block and box patterns")
+	// The compact art uses box-drawing characters
+	// Check for distinctive box-drawing patterns
+	if !strings.Contains(fullArt, "╔═╗") || !strings.Contains(fullArt, "╩╚═") {
+		t.Error("ASCII art should contain characteristic box-drawing patterns")
 	}
 
 	// The art should be consistent (no partial characters)
 	// Use rune count, not byte count, since box-drawing chars are multi-byte UTF-8
 	totalRunes := len([]rune(fullArt))
-	expectedRunes := ASCIIArtWidth * 6 // 6 lines now
+	expectedRunes := ASCIIArtWidth * ASCIIArtLines // 3 lines for compact logo
 	if totalRunes != expectedRunes {
 		t.Errorf("ASCII art total rune length should be %d, got %d", expectedRunes, totalRunes)
 	}
@@ -3311,8 +3311,8 @@ func TestApp_View_TitleDoesNotInterfereWithBoard(t *testing.T) {
 
 	view := app.View()
 
-	// Both the ASCII art and card content should be visible
-	if !strings.Contains(view, "██████╗") {
+	// Both the compact ASCII art and card content should be visible
+	if !strings.Contains(view, "╔═╗╦═╗") {
 		t.Error("view should contain ASCII art header")
 	}
 
@@ -3322,6 +3322,115 @@ func TestApp_View_TitleDoesNotInterfereWithBoard(t *testing.T) {
 
 	if !strings.Contains(view, "Incomplete") {
 		t.Error("view should contain column titles")
+	}
+}
+
+// Tests for PM-020: Smaller logo with top padding
+
+func TestASCIIArtLines_Constant(t *testing.T) {
+	// Verify the ASCIIArtLines constant matches actual array length
+	if ASCIIArtLines != len(ASCIIArtTitle) {
+		t.Errorf("ASCIIArtLines constant (%d) should match ASCIIArtTitle length (%d)",
+			ASCIIArtLines, len(ASCIIArtTitle))
+	}
+}
+
+func TestSmallerLogo_IsCompact(t *testing.T) {
+	// The compact logo should be 3 lines (reduced from 6)
+	if len(ASCIIArtTitle) != 3 {
+		t.Errorf("compact logo should have 3 lines, got %d", len(ASCIIArtTitle))
+	}
+
+	// The compact logo should be narrower than the old one (was 87 chars)
+	if ASCIIArtWidth >= 87 {
+		t.Errorf("compact logo width (%d) should be less than old logo width (87)", ASCIIArtWidth)
+	}
+}
+
+func TestSmallerLogo_IsLegible(t *testing.T) {
+	// The logo should still contain recognizable PRD MONITOR text
+	fullArt := strings.Join(ASCIIArtTitle, "")
+
+	// Check for box-drawing characters that form the letters
+	hasBoxChars := strings.ContainsAny(fullArt, "╔═╗╦╠╚╩║╝╬╣╠╩╦")
+	if !hasBoxChars {
+		t.Error("logo should contain box-drawing characters for legibility")
+	}
+
+	// The logo should have consistent width across all lines
+	for i, line := range ASCIIArtTitle {
+		runeLen := len([]rune(line))
+		if runeLen != ASCIIArtWidth {
+			t.Errorf("line %d has width %d, expected %d", i, runeLen, ASCIIArtWidth)
+		}
+	}
+}
+
+func TestSmallerLogo_HasTopPadding(t *testing.T) {
+	// TopPadding should be positive to add spacing above the logo
+	if TopPadding <= 0 {
+		t.Error("TopPadding should be positive to provide spacing above logo")
+	}
+
+	// The header should include PaddingTop in its style
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+
+	header := app.renderHeader()
+
+	// Header should start with newline(s) from PaddingTop
+	// (lipgloss adds blank lines for PaddingTop)
+	if len(header) == 0 {
+		t.Error("header should not be empty")
+	}
+}
+
+func TestSmallerLogo_DoesNotDominateSmallTerminals(t *testing.T) {
+	// With smaller terminal, ASCII art should use less vertical space
+	testHeight := 30
+	board := NewBoard([]*parser.ParseResult{})
+	board.SetSize(100, testHeight) // Wide enough for ASCII art
+
+	// Compact logo (3 lines) + padding should reserve less than half the terminal
+	// Reserved = ASCIIArtLines + TopPadding + 1 + 3 + BottomPadding = 9 lines
+	// That's less than 30% of a 30-line terminal
+	reservedLines := ASCIIArtLines + TopPadding + 1 + 3 + BottomPadding
+	reservedPercent := float64(reservedLines) / float64(testHeight) * 100
+
+	if reservedPercent > 35 {
+		t.Errorf("logo and header should not dominate screen (%.1f%% > 35%%)", reservedPercent)
+	}
+}
+
+func TestSmallerLogo_BalancedLayout(t *testing.T) {
+	// The smaller logo should leave more space for the board
+	testHeight := 40
+	board := NewBoard([]*parser.ParseResult{})
+	board.SetSize(100, testHeight)
+
+	// With the new compact logo, column height should be at least 31 lines
+	// (40 - 9 reserved = 31)
+	expectedMinHeight := testHeight - (ASCIIArtLines + TopPadding + 1 + 3 + BottomPadding)
+
+	if board.columns[0].height < expectedMinHeight {
+		t.Errorf("column height %d should be at least %d for balanced layout",
+			board.columns[0].height, expectedMinHeight)
+	}
+}
+
+func TestSmallerLogo_MinWidthThreshold(t *testing.T) {
+	// The minimum width for ASCII art should be reasonable for the compact logo
+	// Should be at least ASCIIArtWidth + some margin
+	if MinWidthForASCIIArt < ASCIIArtWidth+5 {
+		t.Errorf("MinWidthForASCIIArt (%d) should be at least ASCIIArtWidth+5 (%d)",
+			MinWidthForASCIIArt, ASCIIArtWidth+5)
+	}
+
+	// Should be low enough that most terminals can display it
+	if MinWidthForASCIIArt > 60 {
+		t.Errorf("MinWidthForASCIIArt (%d) should be <= 60 to work on most terminals",
+			MinWidthForASCIIArt)
 	}
 }
 
@@ -3435,9 +3544,9 @@ func TestBoard_SetSize_AccountsForBottomPadding(t *testing.T) {
 	testHeight := 40
 	board.SetSize(100, testHeight)
 
-	// With wide terminal (ASCII art): 6 lines + TopPadding + 1 margin + 3 footer + BottomPadding
-	// Total reserved = 6 + TopPadding + 1 + 3 + BottomPadding = 6 + 2 + 1 + 3 + 2 = 14
-	expectedReservedLines := 6 + TopPadding + 1 + 3 + BottomPadding
+	// With wide terminal (ASCII art): ASCIIArtLines + TopPadding + 1 margin + 3 footer + BottomPadding
+	// Total reserved = 3 + TopPadding + 1 + 3 + BottomPadding = 3 + 1 + 1 + 3 + 1 = 9
+	expectedReservedLines := ASCIIArtLines + TopPadding + 1 + 3 + BottomPadding
 	expectedColumnHeight := testHeight - expectedReservedLines
 
 	if board.columns[0].height != expectedColumnHeight {
@@ -3455,7 +3564,7 @@ func TestBoard_SetSize_NarrowTerminal_AccountsForBottomPadding(t *testing.T) {
 	board.SetSize(narrowWidth, testHeight)
 
 	// With narrow terminal (simple header): 1 line + TopPadding + 1 margin + 3 footer + BottomPadding
-	// Total reserved = 1 + TopPadding + 1 + 3 + BottomPadding = 1 + 2 + 1 + 3 + 2 = 9
+	// Total reserved = 1 + TopPadding + 1 + 3 + BottomPadding = 1 + 1 + 1 + 3 + 1 = 7
 	expectedReservedLines := 1 + TopPadding + 1 + 3 + BottomPadding
 	expectedColumnHeight := testHeight - expectedReservedLines
 
