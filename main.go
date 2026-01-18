@@ -8,6 +8,7 @@ import (
 	"lanham/prdmonitor/internal/parser"
 	"lanham/prdmonitor/internal/scanner"
 	"lanham/prdmonitor/internal/tui"
+	"lanham/prdmonitor/internal/watcher"
 )
 
 // Config holds the application configuration parsed from CLI arguments.
@@ -104,8 +105,31 @@ func main() {
 	}
 	fmt.Printf("Parsed %d project(s) with %d total user story(ies)\n", len(parseResults), totalStories)
 
-	// Launch the TUI
-	if err := tui.Run(parseResults); err != nil {
+	// Set up file watcher
+	w, err := watcher.New()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not start file watcher: %v\n", err)
+		// Continue without file watching
+		if err := tui.Run(parseResults); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	defer w.Stop()
+
+	// Add all discovered prd.json files to the watcher
+	if err := w.AddFiles(result.Files); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not watch some files: %v\n", err)
+	}
+
+	// Start the watcher in a goroutine
+	go w.Start()
+
+	fmt.Printf("Watching %d file(s) for changes\n", len(result.Files))
+
+	// Launch the TUI with file watching
+	if err := tui.RunWithWatcher(parseResults, w, config.RootDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
 		os.Exit(1)
 	}

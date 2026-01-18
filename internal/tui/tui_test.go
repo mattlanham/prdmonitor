@@ -240,7 +240,7 @@ func TestNewApp(t *testing.T) {
 		},
 	}
 
-	app := NewApp(parseResults)
+	app := NewApp(parseResults, nil, "")
 
 	if app.board == nil {
 		t.Error("app.board should not be nil")
@@ -248,11 +248,12 @@ func TestNewApp(t *testing.T) {
 }
 
 func TestApp_Init(t *testing.T) {
-	app := NewApp([]*parser.ParseResult{})
+	app := NewApp([]*parser.ParseResult{}, nil, "")
 	cmd := app.Init()
 
+	// Without a watcher, Init returns nil
 	if cmd != nil {
-		t.Error("Init should return nil cmd")
+		t.Error("Init should return nil cmd when no watcher is set")
 	}
 }
 
