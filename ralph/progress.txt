@@ -733,3 +733,36 @@
   - Status bar should show current filter only when it's not "All Projects" (to avoid clutter)
   - Filter persists during session but resets on restart - this is application state not persisted to disk
 ---
+
+## 2026-01-18 - PM-019
+- **What was implemented:** Isometric 3D ASCII art logo with proper top padding
+- **Files changed:**
+  - `internal/tui/app.go` - Updated ASCIIArtTitle to 6-line isometric 3D style, updated width constant to 87, increased TopPadding and BottomPadding to 2, updated MinWidthForASCIIArt to 95, changed simple header text to "PRD Monitor" (with space)
+  - `internal/tui/board.go` - Updated SetSize() height calculations to account for 6-line logo and increased padding
+  - `internal/tui/tui_test.go` - Updated 12+ tests to reflect new logo dimensions, patterns, and height calculations
+- **Tests added/updated:**
+  - TestASCIIArtTitle_IsSet - Updated to expect 6 lines
+  - TestASCIIArtWidth_Constant - Updated to verify 87-rune width
+  - TestApp_View_ShowsASCIIArtTitle_WideTerminal - Updated pattern checks for block characters
+  - TestApp_View_ShowsSimpleTitle_NarrowTerminal - Updated to check "PRD Monitor" with space
+  - TestApp_View_ASCIIArtCentered_WideTerminal - Updated pattern checks
+  - TestApp_RenderHeader_ReturnsASCIIArt_WideTerminal - Updated pattern checks
+  - TestApp_RenderHeader_ReturnsSimpleText_NarrowTerminal - Updated for new text
+  - TestASCIIArtTitle_ContainsPRDMonitor - Updated total runes calculation for 6 lines
+  - TestApp_View_TitleDoesNotInterfereWithBoard - Updated pattern checks
+  - TestBoard_SetSize_AccountsForASCIIArtHeight_WideTerminal - Updated reserved lines to 14
+  - TestBoard_SetSize_AccountsForSimpleHeaderHeight_NarrowTerminal - Updated reserved lines to 9
+  - TestBoard_SetSize_AccountsForBottomPadding - Updated with new formula
+  - TestBoard_SetSize_NarrowTerminal_AccountsForBottomPadding - Updated with new formula
+  - TestApp_View_HeaderHasBreathingRoom - Updated pattern checks
+- **Learnings:**
+  - Isometric 3D ASCII art style uses Unicode block characters (█▀▄) combined with box-drawing characters (╔═╗╚═╝)
+  - The `figlet` font style "ANSI Shadow" provides a clean isometric 3D look
+  - When changing logo size, must update: ASCIIArtTitle, ASCIIArtWidth, MinWidthForASCIIArt, and SetSize() reserved lines calculation
+  - TopPadding and BottomPadding constants should be used consistently in both renderHeader() and SetSize() calculations
+  - Height calculation formula: `reservedLines = headerLines + TopPadding + marginBottom + footerLines + BottomPadding`
+  - Wide terminal (ASCII art): 6 + 2 + 1 + 3 + 2 = 14 reserved lines
+  - Narrow terminal (simple text): 1 + 2 + 1 + 3 + 2 = 9 reserved lines
+  - Use `len([]rune(line))` to measure visual character width for Unicode strings
+  - The simple text fallback should also be updated to match the ASCII art's message ("PRD Monitor" with space)
+---
