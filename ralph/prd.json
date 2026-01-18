@@ -145,7 +145,7 @@
         "Board handles at least 20 projects without performance issues"
       ],
       "priority": 10,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-012",

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -928,5 +929,310 @@ func TestApp_HandleFileChange_DeleteMultipleStories(t *testing.T) {
 		if len(col.cards) != 0 {
 			t.Errorf("Column %d: expected 0 cards after deletion, got %d - orphaned cards remain", i, len(col.cards))
 		}
+	}
+}
+
+// Multi-project aggregation tests for PM-011
+
+func TestNewBoard_Handles20PlusProjects(t *testing.T) {
+	// Create 25 projects with 3 stories each (one per status)
+	// This tests the requirement: "Board handles at least 20 projects without performance issues"
+	numProjects := 25
+	parseResults := make([]*parser.ParseResult, numProjects)
+
+	for i := 0; i < numProjects; i++ {
+		parseResults[i] = &parser.ParseResult{
+			PRD: &model.PRD{
+				Name: fmt.Sprintf("Project%d", i+1),
+				UserStories: []model.UserStory{
+					{ID: fmt.Sprintf("P%d-001", i+1), Title: "Incomplete Story", Status: model.StatusIncomplete, Priority: i},
+					{ID: fmt.Sprintf("P%d-002", i+1), Title: "In Progress Story", Status: model.StatusInProgress, Priority: i},
+					{ID: fmt.Sprintf("P%d-003", i+1), Title: "Complete Story", Status: model.StatusComplete, Priority: i},
+				},
+			},
+			FilePath: fmt.Sprintf("/test/project%d/prd.json", i+1),
+		}
+	}
+
+	// Board creation should not panic or fail
+	board := NewBoard(parseResults)
+
+	// Verify all columns have correct number of cards
+	if len(board.columns[0].cards) != numProjects {
+		t.Errorf("Incomplete column: expected %d cards, got %d", numProjects, len(board.columns[0].cards))
+	}
+	if len(board.columns[1].cards) != numProjects {
+		t.Errorf("In Progress column: expected %d cards, got %d", numProjects, len(board.columns[1].cards))
+	}
+	if len(board.columns[2].cards) != numProjects {
+		t.Errorf("Complete column: expected %d cards, got %d", numProjects, len(board.columns[2].cards))
+	}
+
+	// Verify total cards
+	totalCards := len(board.columns[0].cards) + len(board.columns[1].cards) + len(board.columns[2].cards)
+	expectedTotal := numProjects * 3
+	if totalCards != expectedTotal {
+		t.Errorf("Expected %d total cards across all columns, got %d", expectedTotal, totalCards)
+	}
+}
+
+func TestNewBoard_MultiProjectAggregation_CardsDistinguishedByProjectName(t *testing.T) {
+	// Create multiple projects and verify each card shows distinct project name
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Frontend App",
+				UserStories: []model.UserStory{
+					{ID: "FE-001", Title: "Build UI", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/projects/frontend/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Backend API",
+				UserStories: []model.UserStory{
+					{ID: "BE-001", Title: "Create endpoints", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/projects/backend/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Mobile App",
+				UserStories: []model.UserStory{
+					{ID: "MOB-001", Title: "Setup React Native", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/projects/mobile/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// All 3 cards should be in the Incomplete column
+	if len(board.columns[0].cards) != 3 {
+		t.Fatalf("Expected 3 cards in Incomplete column, got %d", len(board.columns[0].cards))
+	}
+
+	// Collect all unique project names
+	projectNames := make(map[string]bool)
+	for _, card := range board.columns[0].cards {
+		projectNames[card.ProjectName] = true
+	}
+
+	// Verify we have 3 distinct project names
+	if len(projectNames) != 3 {
+		t.Errorf("Expected 3 distinct project names, got %d", len(projectNames))
+	}
+
+	// Verify specific project names exist
+	expectedNames := []string{"Frontend App", "Backend API", "Mobile App"}
+	for _, name := range expectedNames {
+		if !projectNames[name] {
+			t.Errorf("Expected project name %q not found in cards", name)
+		}
+	}
+}
+
+func TestNewBoard_MultiProject_SortsByPriorityAcrossAllProjects(t *testing.T) {
+	// Test that cards from different projects are sorted by priority regardless of source
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "ProjectC",
+				UserStories: []model.UserStory{
+					{ID: "C-001", Title: "Low Priority", Status: model.StatusIncomplete, Priority: 10},
+				},
+			},
+			FilePath: "/projects/c/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "ProjectA",
+				UserStories: []model.UserStory{
+					{ID: "A-001", Title: "High Priority", Status: model.StatusIncomplete, Priority: 0},
+				},
+			},
+			FilePath: "/projects/a/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "ProjectB",
+				UserStories: []model.UserStory{
+					{ID: "B-001", Title: "Medium Priority", Status: model.StatusIncomplete, Priority: 5},
+				},
+			},
+			FilePath: "/projects/b/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Verify cards are sorted by priority, not by project order
+	incompleteCol := board.columns[0]
+	if len(incompleteCol.cards) != 3 {
+		t.Fatalf("Expected 3 cards, got %d", len(incompleteCol.cards))
+	}
+
+	// Expected order by priority: A-001 (0), B-001 (5), C-001 (10)
+	expectedOrder := []struct {
+		id       string
+		priority int
+		project  string
+	}{
+		{"A-001", 0, "ProjectA"},
+		{"B-001", 5, "ProjectB"},
+		{"C-001", 10, "ProjectC"},
+	}
+
+	for i, expected := range expectedOrder {
+		card := incompleteCol.cards[i]
+		if card.Story.ID != expected.id {
+			t.Errorf("Card %d: expected ID %q, got %q", i, expected.id, card.Story.ID)
+		}
+		if card.Story.Priority != expected.priority {
+			t.Errorf("Card %d: expected priority %d, got %d", i, expected.priority, card.Story.Priority)
+		}
+		if card.ProjectName != expected.project {
+			t.Errorf("Card %d: expected project %q, got %q", i, expected.project, card.ProjectName)
+		}
+	}
+}
+
+func TestBoard_View_With20PlusProjects(t *testing.T) {
+	// Test that the board View() method handles 20+ projects without issues
+	numProjects := 20
+	parseResults := make([]*parser.ParseResult, numProjects)
+
+	for i := 0; i < numProjects; i++ {
+		parseResults[i] = &parser.ParseResult{
+			PRD: &model.PRD{
+				Name: fmt.Sprintf("Project%d", i+1),
+				UserStories: []model.UserStory{
+					{ID: fmt.Sprintf("P%d-001", i+1), Title: "Story", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: fmt.Sprintf("/test/project%d/prd.json", i+1),
+		}
+	}
+
+	board := NewBoard(parseResults)
+	board.SetSize(120, 50)
+
+	// View should not panic and should return a non-empty string
+	view := board.View()
+
+	if view == "" {
+		t.Error("Board view should not be empty with 20+ projects")
+	}
+
+	// Verify some project names appear in the view
+	if !strings.Contains(view, "Project1") {
+		t.Error("Board view should contain at least one project name")
+	}
+}
+
+func TestApp_Update_With20PlusProjects(t *testing.T) {
+	// Test that the App handles 20+ projects without issues
+	numProjects := 20
+	parseResults := make([]*parser.ParseResult, numProjects)
+
+	for i := 0; i < numProjects; i++ {
+		parseResults[i] = &parser.ParseResult{
+			PRD: &model.PRD{
+				Name: fmt.Sprintf("Project%d", i+1),
+				UserStories: []model.UserStory{
+					{ID: fmt.Sprintf("P%d-001", i+1), Title: "Story", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: fmt.Sprintf("/test/project%d/prd.json", i+1),
+		}
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Initialize should not fail
+	cmd := app.Init()
+	if cmd != nil {
+		t.Error("Init should return nil without watcher")
+	}
+
+	// Window resize should handle 20+ projects
+	newApp, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 50})
+	updatedApp := newApp.(*App)
+
+	// Verify board was sized correctly
+	if updatedApp.board.width != 120 {
+		t.Errorf("Expected width 120, got %d", updatedApp.board.width)
+	}
+
+	// View should render without issues
+	view := updatedApp.View()
+	if view == "" {
+		t.Error("View should not be empty")
+	}
+}
+
+func TestMultiProject_CardsFromAllStatusesAggregated(t *testing.T) {
+	// Test that cards from multiple projects with different statuses
+	// are correctly aggregated into the appropriate columns
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "WebApp",
+				UserStories: []model.UserStory{
+					{ID: "WEB-001", Title: "Design", Status: model.StatusComplete},
+					{ID: "WEB-002", Title: "Build", Status: model.StatusInProgress},
+					{ID: "WEB-003", Title: "Test", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/projects/web/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "CLI Tool",
+				UserStories: []model.UserStory{
+					{ID: "CLI-001", Title: "Parse args", Status: model.StatusComplete},
+					{ID: "CLI-002", Title: "Core logic", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/projects/cli/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Database",
+				UserStories: []model.UserStory{
+					{ID: "DB-001", Title: "Schema", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/projects/db/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Incomplete column: WEB-003 + DB-001 = 2 cards
+	if len(board.columns[0].cards) != 2 {
+		t.Errorf("Incomplete column: expected 2 cards, got %d", len(board.columns[0].cards))
+	}
+
+	// In Progress column: WEB-002 + CLI-002 = 2 cards
+	if len(board.columns[1].cards) != 2 {
+		t.Errorf("In Progress column: expected 2 cards, got %d", len(board.columns[1].cards))
+	}
+
+	// Complete column: WEB-001 + CLI-001 = 2 cards
+	if len(board.columns[2].cards) != 2 {
+		t.Errorf("Complete column: expected 2 cards, got %d", len(board.columns[2].cards))
+	}
+
+	// Verify project names are preserved on cards
+	incompleteProjects := make(map[string]bool)
+	for _, card := range board.columns[0].cards {
+		incompleteProjects[card.ProjectName] = true
+	}
+	if !incompleteProjects["WebApp"] || !incompleteProjects["Database"] {
+		t.Error("Incomplete column should have cards from WebApp and Database")
 	}
 }

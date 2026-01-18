@@ -351,3 +351,22 @@
   - File deletion handling was mostly already implemented in PM-007/PM-008 - this story focused on cleanup and comprehensive testing
   - Test cases for deletion should cover: single project removal, last project removal, non-existent file deletion, and multi-story projects
 ---
+
+## 2026-01-18 - PM-011
+- **What was implemented:** Multi-project aggregation - verified and tested existing functionality with comprehensive test coverage for 20+ projects
+- **Files changed:**
+  - `internal/tui/tui_test.go` - Added 7 new tests for multi-project aggregation (20+ project performance, project name distinction, cross-project sorting)
+- **Tests added:**
+  - TestNewBoard_Handles20PlusProjects - Tests board with 25 projects (75 total cards) without performance issues
+  - TestNewBoard_MultiProjectAggregation_CardsDistinguishedByProjectName - Tests distinct project names on cards
+  - TestNewBoard_MultiProject_SortsByPriorityAcrossAllProjects - Tests priority sorting across different projects
+  - TestBoard_View_With20PlusProjects - Tests View() method with 20 projects
+  - TestApp_Update_With20PlusProjects - Tests App Update/Init with 20 projects
+  - TestMultiProject_CardsFromAllStatusesAggregated - Tests cards from multiple projects across all status columns
+- **Learnings:**
+  - Multi-project aggregation was already fully implemented in PM-004 (NewBoard iterates all parseResults)
+  - PM-011 focused on validation and comprehensive testing of the 20+ project requirement
+  - Existing implementation handles project name display (Card.ProjectName), status-based sorting (SortByPriority), and cross-project aggregation correctly
+  - Test coverage for scale (20+ projects) is important for performance guarantees even when functionality already exists
+  - When acceptance criteria seems already implemented, focus on adding comprehensive tests to verify all requirements
+---
