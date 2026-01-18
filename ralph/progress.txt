@@ -23,6 +23,14 @@
 - Custom error types (e.g., `NotADirectoryError`) for specific error handling
 - Module name is `lanham/prdmonitor` (important for internal imports)
 
+### Parser Package
+- `ParseFile(filePath)` returns `*ParseResult, error` - reads and parses a single file
+- `ParseBytes(data)` returns `*model.PRD, error` - parses JSON bytes directly (useful for testing)
+- `ParseFiles([]string)` returns `([]*ParseResult, []error)` - batch parsing with non-fatal error collection
+- Custom `ParseError` type wraps file path with underlying error, implements `Unwrap()` for error chains
+- Use `errors.As()` to check for specific error types in tests
+- JSON unmarshaling handles missing fields gracefully (zero values)
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -69,4 +77,37 @@
   - Return struct with both results and errors for non-fatal error handling
   - Custom error types allow callers to check for specific error conditions
   - Module name `lanham/prdmonitor` must be used in all internal imports
+---
+
+## 2026-01-18 - PM-003
+- **What was implemented:** JSON parsing and validation for prd.json files
+- **Files changed:**
+  - `internal/parser/parser.go` - New package with ParseFile, ParseBytes, and ParseFiles functions
+  - `internal/parser/parser_test.go` - Comprehensive test suite (18 test cases)
+  - `main.go` - Integrated parser to parse all discovered files and display user story counts
+- **Tests added:**
+  - TestParseBytes_ValidJSON - Tests parsing of complete valid JSON
+  - TestParseBytes_ExtractsProjectName - Tests project name extraction
+  - TestParseBytes_ExtractsUserStoryFields - Tests all user story fields
+  - TestParseBytes_MultipleUserStories - Tests parsing multiple stories
+  - TestParseBytes_EmptyUserStories - Tests empty story array
+  - TestParseBytes_MalformedJSON - Tests various malformed JSON inputs
+  - TestParseBytes_MissingFields - Tests graceful handling of missing fields
+  - TestParseFile_ValidFile - Tests file reading and parsing
+  - TestParseFile_NonExistentFile - Tests error for missing files
+  - TestParseFile_MalformedFile - Tests error for invalid JSON in files
+  - TestParseError_Error - Tests error message formatting
+  - TestParseError_Unwrap - Tests error unwrapping
+  - TestParseFiles_MultipleFiles - Tests batch parsing
+  - TestParseFiles_WithErrors - Tests mixed valid/invalid file parsing
+  - TestParseFiles_NonExistentFiles - Tests all files failing
+  - TestParseFiles_EmptyList - Tests empty input
+  - TestParseBytes_AllStatusValues - Tests all status value parsing
+- **Learnings:**
+  - Use `os.ReadFile()` for simple file reading (replaces ioutil.ReadFile in newer Go)
+  - Custom error types should implement `Unwrap()` for error chain inspection
+  - Use `errors.As()` to check for specific error types (not type assertion)
+  - `encoding/json` gracefully handles missing JSON fields with zero values
+  - Batch processing pattern: return `(results, errors)` tuple for non-fatal error handling
+  - Test table-driven tests with `t.Run()` for clearer test organization
 ---

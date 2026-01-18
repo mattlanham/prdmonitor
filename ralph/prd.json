@@ -39,7 +39,7 @@
         "Malformed JSON files are handled gracefully with error logging"
       ],
       "priority": 2,
-      "status": "incomplete"
+      "status": "in-progress"
     },
     {
       "id": "PM-004",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"lanham/prdmonitor/internal/parser"
 	"lanham/prdmonitor/internal/scanner"
 )
 
@@ -86,4 +87,19 @@ func main() {
 	// Display the number of discovered projects
 	fmt.Printf("PRDMonitor starting with root directory: %s\n", config.RootDir)
 	fmt.Printf("Discovered %d project(s)\n", result.Count())
+
+	// Parse all discovered prd.json files
+	parseResults, parseErrors := parser.ParseFiles(result.Files)
+
+	// Log any parsing errors
+	for _, parseErr := range parseErrors {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", parseErr)
+	}
+
+	// Display parsed project information
+	totalStories := 0
+	for _, pr := range parseResults {
+		totalStories += len(pr.PRD.UserStories)
+	}
+	fmt.Printf("Parsed %d project(s) with %d total user story(ies)\n", len(parseResults), totalStories)
 }
