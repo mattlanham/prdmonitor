@@ -37,7 +37,9 @@
 - `tui.Run(parseResults)` is the main entry point - launches the TUI program
 - `tui.RunWithWatcher(parseResults, watcher, rootDir)` for file watching support
 - `tea.WithAltScreen()` provides clean terminal switching
+- `tea.WithMouseCellMotion()` enables mouse event handling (wheel scroll)
 - `tea.WindowSizeMsg` is used to handle terminal resize events
+- `tea.MouseMsg` handles mouse events with Type: `tea.MouseWheelUp`, `tea.MouseWheelDown`
 - `tea.Cmd` pattern for async operations (e.g., listening for file change events)
 - Custom message types (e.g., `FileChangedMsg`) for external events
 - Lip Gloss styles: use `lipgloss.NewStyle()` for creating styles, chain methods
@@ -45,6 +47,17 @@
 - Card component with box-drawing borders using `lipgloss.RoundedBorder()`
 - `truncateString()` helper function for text that may exceed display width
 - Column colors: Red (203) for Incomplete, Yellow (220) for In Progress, Green (84) for Complete
+
+### Scrollable Column Pattern
+- Each Column tracks its own `scrollOffset` for independent scrolling
+- `visibleCardCount()` estimates visible cards based on column height (~6 lines per card)
+- `maxScrollOffset()` returns `len(cards) - visibleCount` (clamped to 0)
+- `ensureCardVisible(cardIndex)` auto-adjusts scroll offset to keep card in view
+- Navigation methods (MoveUp/MoveDown) call `ensureSelectedCardVisible()` after updating selection
+- View() renders only cards in range `[scrollOffset, scrollOffset+visibleCount]`
+- Scroll indicators: `▲ more above` / `▼ more below` for visual feedback
+- Position indicator: `(1-5 of 20)` shows current visible range
+- Mouse wheel: `tea.MouseMsg.X / columnWidth` determines target column
 
 ### Watcher Package (fsnotify)
 - `watcher.New()` creates a new file watcher
@@ -439,4 +452,41 @@
   - Card expansion shows full description, acceptance criteria, priority, and status
   - Selection highlighting uses different border color (cyan) to distinguish from default (gray)
   - Navigation clamping is important when columns have different card counts
+---
+
+## 2026-01-18 - PM-013
+- **What was implemented:** Scrollable columns with scroll position tracking, visual indicators, keyboard-triggered scrolling, and mouse wheel support
+- **Files changed:**
+  - `internal/tui/column.go` - Added scrollOffset field, ScrollUp/ScrollDown methods, ensureCardVisible(), visibleCardCount(), scroll position indicator rendering
+  - `internal/tui/board.go` - Added ScrollColumnUp/ScrollColumnDown methods and ensureSelectedCardVisible() for keyboard navigation
+  - `internal/tui/app.go` - Added handleMouseEvent() for mouse wheel scrolling, enabled tea.WithMouseCellMotion()
+  - `internal/tui/tui_test.go` - Added 21 new tests for scrolling functionality
+- **Tests added:**
+  - TestColumn_ScrollOffset_Initial - Tests initial scroll offset is 0
+  - TestColumn_VisibleCardCount - Tests visible card calculation
+  - TestColumn_ScrollUp - Tests scroll up with clamping at top
+  - TestColumn_ScrollDown - Tests scroll down with clamping at max
+  - TestColumn_SetScrollOffset - Tests direct scroll offset setting with clamping
+  - TestColumn_MaxScrollOffset - Tests max offset calculation
+  - TestColumn_EnsureCardVisible_ScrollsDown - Tests auto-scroll when navigating down
+  - TestColumn_EnsureCardVisible_ScrollsUp - Tests auto-scroll when navigating up
+  - TestColumn_View_ShowsScrollIndicator_WhenScrollable - Tests "(X-Y of Z)" position indicator
+  - TestColumn_View_ShowsMoreBelowIndicator - Tests "more below" arrow indicator
+  - TestColumn_View_HidesScrollIndicators_WhenNoScrollNeeded - Tests indicators hidden when all cards fit
+  - TestBoard_ScrollColumnUp - Tests board-level scroll up
+  - TestBoard_ScrollColumnDown - Tests board-level scroll down
+  - TestColumn_IndependentScrolling - Tests each column scrolls independently
+  - TestApp_KeyboardNavigation_TriggersScrolling - Tests MoveUp/MoveDown triggers scroll adjustment
+  - TestApp_MouseWheelScroll - Tests mouse wheel up/down events
+  - TestApp_MouseWheelScroll_BlockedByOverlay - Tests mouse scroll blocked when overlay shown
+- **Learnings:**
+  - Each Column stores its own `scrollOffset` for independent scrolling
+  - `visibleCardCount()` estimates how many cards fit based on column height and card height (~6 lines per card)
+  - `ensureCardVisible()` is called during navigation to keep selected card in view
+  - Navigation methods (MoveUp/MoveDown) must trigger scroll adjustment, not just View()
+  - Mouse events use `tea.MouseMsg` with Type: `tea.MouseWheelUp`, `tea.MouseWheelDown`
+  - Enable mouse support with `tea.WithMouseCellMotion()` in NewProgram options
+  - Column position for mouse events is determined by `msg.X / columnWidth`
+  - Scroll indicators (▲ ▼) provide visual feedback about content above/below
+  - Position indicator format "(1-5 of 20)" shows current visible range
 ---
