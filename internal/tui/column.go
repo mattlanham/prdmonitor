@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -29,6 +30,14 @@ func NewColumn(title string, color lipgloss.Color) *Column {
 // AddCard adds a card to this column.
 func (c *Column) AddCard(card *Card) {
 	c.cards = append(c.cards, card)
+}
+
+// SortByPriority sorts cards by priority (lower priority values first).
+// This ensures cards with priority 0 appear at the top, followed by 1, 2, etc.
+func (c *Column) SortByPriority() {
+	sort.Slice(c.cards, func(i, j int) bool {
+		return c.cards[i].Story.Priority < c.cards[j].Story.Priority
+	})
 }
 
 // SetSize updates the column dimensions.

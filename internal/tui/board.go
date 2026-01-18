@@ -40,6 +40,11 @@ func NewBoard(parseResults []*parser.ParseResult) *Board {
 		}
 	}
 
+	// Sort cards within each column by priority (lower priority values first)
+	incompleteCol.SortByPriority()
+	inProgressCol.SortByPriority()
+	completeCol.SortByPriority()
+
 	return &Board{
 		columns: []*Column{incompleteCol, inProgressCol, completeCol},
 	}

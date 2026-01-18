@@ -455,3 +455,198 @@ func TestCard_Render_MinimumWidth(t *testing.T) {
 		t.Error("card should render even with minimum width")
 	}
 }
+
+// Sorting tests for PM-006
+
+func TestColumn_SortByPriority(t *testing.T) {
+	col := NewColumn("Test", "39")
+
+	// Add cards in reverse priority order (highest priority last)
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:       "US-003",
+			Title:    "Low Priority",
+			Priority: 10,
+		},
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:       "US-001",
+			Title:    "High Priority",
+			Priority: 0,
+		},
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:       "US-002",
+			Title:    "Medium Priority",
+			Priority: 5,
+		},
+	})
+
+	// Sort by priority
+	col.SortByPriority()
+
+	// Verify order: priority 0, 5, 10
+	if len(col.cards) != 3 {
+		t.Fatalf("expected 3 cards, got %d", len(col.cards))
+	}
+
+	expectedIDs := []string{"US-001", "US-002", "US-003"}
+	for i, expectedID := range expectedIDs {
+		if col.cards[i].Story.ID != expectedID {
+			t.Errorf("card %d: expected ID %q, got %q", i, expectedID, col.cards[i].Story.ID)
+		}
+	}
+}
+
+func TestColumn_SortByPriority_EmptyColumn(t *testing.T) {
+	col := NewColumn("Test", "39")
+
+	// Should not panic on empty column
+	col.SortByPriority()
+
+	if len(col.cards) != 0 {
+		t.Error("empty column should remain empty after sort")
+	}
+}
+
+func TestColumn_SortByPriority_SingleCard(t *testing.T) {
+	col := NewColumn("Test", "39")
+
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:       "US-001",
+			Priority: 5,
+		},
+	})
+
+	col.SortByPriority()
+
+	if len(col.cards) != 1 || col.cards[0].Story.ID != "US-001" {
+		t.Error("single card should remain in place after sort")
+	}
+}
+
+func TestColumn_SortByPriority_SamePriority(t *testing.T) {
+	col := NewColumn("Test", "39")
+
+	// Add cards with same priority
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:       "US-001",
+			Priority: 5,
+		},
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:       "US-002",
+			Priority: 5,
+		},
+	})
+
+	col.SortByPriority()
+
+	// Both cards should still be present
+	if len(col.cards) != 2 {
+		t.Fatalf("expected 2 cards, got %d", len(col.cards))
+	}
+
+	// Stable sort maintains original order for equal priorities
+	// (Go's sort.Slice is not stable, but the important thing is they're both present)
+	priorities := []int{col.cards[0].Story.Priority, col.cards[1].Story.Priority}
+	if priorities[0] != 5 || priorities[1] != 5 {
+		t.Error("cards with same priority should both be present")
+	}
+}
+
+func TestNewBoard_SortsCardsByPriority(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-003", Title: "Low Priority", Status: model.StatusIncomplete, Priority: 10},
+					{ID: "US-001", Title: "High Priority", Status: model.StatusIncomplete, Priority: 0},
+					{ID: "US-002", Title: "Medium Priority", Status: model.StatusIncomplete, Priority: 5},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Check that Incomplete column has cards sorted by priority
+	incompleteCol := board.columns[0]
+	if len(incompleteCol.cards) != 3 {
+		t.Fatalf("expected 3 cards in Incomplete column, got %d", len(incompleteCol.cards))
+	}
+
+	// Verify order: priority 0, 5, 10
+	expectedOrder := []struct {
+		id       string
+		priority int
+	}{
+		{"US-001", 0},
+		{"US-002", 5},
+		{"US-003", 10},
+	}
+
+	for i, expected := range expectedOrder {
+		card := incompleteCol.cards[i]
+		if card.Story.ID != expected.id {
+			t.Errorf("card %d: expected ID %q, got %q", i, expected.id, card.Story.ID)
+		}
+		if card.Story.Priority != expected.priority {
+			t.Errorf("card %d: expected priority %d, got %d", i, expected.priority, card.Story.Priority)
+		}
+	}
+}
+
+func TestNewBoard_SortsAcrossMultipleProjects(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "ProjectA",
+				UserStories: []model.UserStory{
+					{ID: "A-001", Title: "A Story", Status: model.StatusInProgress, Priority: 5},
+				},
+			},
+			FilePath: "/test/a/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "ProjectB",
+				UserStories: []model.UserStory{
+					{ID: "B-001", Title: "B Story", Status: model.StatusInProgress, Priority: 1},
+				},
+			},
+			FilePath: "/test/b/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Check that In Progress column has cards sorted by priority across projects
+	inProgressCol := board.columns[1]
+	if len(inProgressCol.cards) != 2 {
+		t.Fatalf("expected 2 cards in In Progress column, got %d", len(inProgressCol.cards))
+	}
+
+	// B-001 (priority 1) should come before A-001 (priority 5)
+	if inProgressCol.cards[0].Story.ID != "B-001" {
+		t.Errorf("expected first card to be B-001 (priority 1), got %s (priority %d)",
+			inProgressCol.cards[0].Story.ID, inProgressCol.cards[0].Story.Priority)
+	}
+	if inProgressCol.cards[1].Story.ID != "A-001" {
+		t.Errorf("expected second card to be A-001 (priority 5), got %s (priority %d)",
+			inProgressCol.cards[1].Story.ID, inProgressCol.cards[1].Story.Priority)
+	}
+}
