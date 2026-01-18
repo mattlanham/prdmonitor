@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"lanham/prdmonitor/internal/parser"
@@ -15,9 +15,12 @@ import (
 // ASCIIArtTitle is the ASCII art representation of "PRD Monitor".
 // Uses a compact, legible style to leave more space for the Kanban board.
 var ASCIIArtTitle = []string{
-	"╔═╗╦═╗╔╦╗  ╔╦╗╔═╗╔╗╔╦╔╦╗╔═╗╦═╗",
-	"╠═╝╠╦╝ ║║  ║║║║ ║║║║║ ║ ║ ║╠╦╝",
-	"╩  ╩╚══╩╝  ╩ ╩╚═╝╝╚╝╩ ╩ ╚═╝╩╚═",
+	"    ____  ____  ____     __  ___            _ __            ",
+	"   / __ \\/ __ \\/ __ \\   /  |/  /___  ____  (_) /_____  _____",
+	"  / /_/ / /_/ / / / /  / /|_/ / __ \\/ __ \\/ / __/ __ \\/ ___/",
+	" / ____/ _, _/ /_/ /  / /  / / /_/ / / / / / /_/ /_/ / /    ",
+	"/_/   /_/ |_/_____/  /_/  /_/\\____/_/ /_/_/\\__/\\____/_/     ",
+	"                                                            ",
 }
 
 // ASCIIArtWidth is the visual width of the ASCII art title in rune characters.
@@ -38,7 +41,7 @@ const (
 
 // ASCIIArtLines is the number of lines in the ASCII art logo.
 // Used for height calculations in board.go.
-const ASCIIArtLines = 3
+const ASCIIArtLines = 7
 
 // ReadOnlyMessage is displayed in the status bar to indicate view-only mode.
 const ReadOnlyMessage = "VIEW-ONLY"
@@ -447,14 +450,21 @@ func (a *App) View() string {
 	header := a.renderHeader()
 
 	// Filter indicator (shown when filter is active)
+	// Always reserve space for the filter indicator to prevent layout shifts
 	filterIndicator := a.renderFilterIndicator()
+	indicatorStyle := lipgloss.NewStyle().
+		Width(a.width - 4).
+		Align(lipgloss.Center).
+		MarginBottom(0)
+
+	// Always render the filter indicator space, even when empty
+	// This keeps the logo position fixed when the badge appears/disappears
 	if filterIndicator != "" {
-		// Center the filter indicator
-		indicatorStyle := lipgloss.NewStyle().
-			Width(a.width - 4).
-			Align(lipgloss.Center).
-			MarginBottom(1)
 		filterIndicator = indicatorStyle.Render(filterIndicator)
+	} else {
+		// Reserve space with a single space to maintain consistent layout
+		// This ensures the line height is preserved even when no badge is shown
+		filterIndicator = indicatorStyle.Render(" ")
 	}
 
 	// Board view
@@ -465,23 +475,10 @@ func (a *App) View() string {
 		Foreground(lipgloss.Color("241")).
 		MarginTop(1)
 
-	// Show current filter in status bar
-	filterDisplay := ""
-	if a.projectFilter != "" && a.projectFilter != AllProjectsFilter {
-		filterDisplay = " | Filter: " + a.projectFilter
-	}
-
-	statusBar := statusBarStyle.Render(ReadOnlyMessage + filterDisplay + " | ↑↓←→/hjkl: navigate | Enter: expand | f: filter | ?: help | q: quit")
-
-	// Help message for editing
-	helpMsgStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("243")).
-		Italic(true)
-
-	helpMsg := helpMsgStyle.Render(EditHelpMessage)
+	statusBar := statusBarStyle.Render("↑↓←→/hjkl: navigate | Enter: expand | f: filter | ?: help | q: quit")
 
 	// Combine status bar and help message
-	footer := lipgloss.JoinVertical(lipgloss.Left, statusBar, helpMsg)
+	footer := lipgloss.JoinVertical(lipgloss.Left, statusBar)
 
 	// Base view with equal padding on all sides
 	// Apply padding to the entire content area for breathing room from terminal edge
@@ -491,13 +488,9 @@ func (a *App) View() string {
 		PaddingRight(HorizontalPadding).
 		PaddingBottom(BottomPadding)
 
-	// Build content with optional filter indicator between header and board
+	// Build content with filter indicator space always present between header and board
 	var contentParts []string
-	contentParts = append(contentParts, header)
-	if filterIndicator != "" {
-		contentParts = append(contentParts, filterIndicator)
-	}
-	contentParts = append(contentParts, boardView, footer)
+	contentParts = append(contentParts, header, filterIndicator, boardView, footer)
 
 	baseView := paddedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, contentParts...))
 
