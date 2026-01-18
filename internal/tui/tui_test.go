@@ -2956,8 +2956,8 @@ func TestApp_View_HeaderHasBreathingRoom(t *testing.T) {
 	view := app.View()
 
 	// The header should not be at the very first character (has top padding)
-	// With ASCII art, we look for the first line of the art
-	headerText := "╔═╗╦═╗╔╦╗" // Start of ASCII art first line
+	// With isometric 3D ASCII art, we look for block characters
+	headerText := "██████╗" // Distinctive block pattern from first line
 	headerIndex := strings.Index(view, headerText)
 
 	if headerIndex == 0 {
@@ -3091,9 +3091,9 @@ func TestASCIIArtTitle_IsSet(t *testing.T) {
 		t.Error("ASCIIArtTitle should not be empty")
 	}
 
-	// Should have 3 lines for the ASCII art
-	if len(ASCIIArtTitle) != 3 {
-		t.Errorf("expected 3 lines of ASCII art, got %d", len(ASCIIArtTitle))
+	// Should have 6 lines for the isometric/3D ASCII art style
+	if len(ASCIIArtTitle) != 6 {
+		t.Errorf("expected 6 lines of ASCII art, got %d", len(ASCIIArtTitle))
 	}
 }
 
@@ -3136,14 +3136,14 @@ func TestApp_View_ShowsASCIIArtTitle_WideTerminal(t *testing.T) {
 	view := app.View()
 
 	// Check that at least part of the ASCII art is present
-	// The first line of the ASCII art is distinctive
-	if !strings.Contains(view, "╔═╗") {
+	// The isometric 3D style uses block characters
+	if !strings.Contains(view, "██████╗") {
 		t.Error("wide terminal should show ASCII art title")
 	}
 
-	// Should also contain other parts of the art
-	if !strings.Contains(view, "╠═╝") || !strings.Contains(view, "╩") {
-		t.Error("ASCII art should have all three lines visible")
+	// Should also contain characteristic parts of the art
+	if !strings.Contains(view, "╚═╝") {
+		t.Error("ASCII art should have all six lines visible")
 	}
 }
 
@@ -3156,13 +3156,13 @@ func TestApp_View_ShowsSimpleTitle_NarrowTerminal(t *testing.T) {
 
 	view := app.View()
 
-	// Should contain simple text title
-	if !strings.Contains(view, "PRDMonitor") {
-		t.Error("narrow terminal should still show PRDMonitor title")
+	// Should contain simple text title (with space between PRD and Monitor)
+	if !strings.Contains(view, "PRD Monitor") {
+		t.Error("narrow terminal should still show PRD Monitor title")
 	}
 
-	// Should NOT contain ASCII art characters (the distinctive double-line box characters)
-	if strings.Contains(view, "╔═╗╦═╗╔╦╗") {
+	// Should NOT contain ASCII art characters (the block characters used in 3D style)
+	if strings.Contains(view, "██████╗") {
 		t.Error("narrow terminal should not show ASCII art, should use simple text")
 	}
 }
@@ -3176,8 +3176,8 @@ func TestApp_View_ASCIIArtCentered_WideTerminal(t *testing.T) {
 
 	view := app.View()
 
-	// Check that ASCII art is present
-	if !strings.Contains(view, "╔═╗") {
+	// Check that ASCII art is present (using block characters from 3D style)
+	if !strings.Contains(view, "██████╗") {
 		t.Error("wide terminal should show ASCII art")
 	}
 
@@ -3193,8 +3193,8 @@ func TestApp_RenderHeader_ReturnsASCIIArt_WideTerminal(t *testing.T) {
 
 	header := app.renderHeader()
 
-	// Header should contain ASCII art
-	if !strings.Contains(header, "╔═╗") {
+	// Header should contain ASCII art (using block characters from 3D style)
+	if !strings.Contains(header, "██████╗") {
 		t.Error("renderHeader should return ASCII art for wide terminal")
 	}
 }
@@ -3207,13 +3207,13 @@ func TestApp_RenderHeader_ReturnsSimpleText_NarrowTerminal(t *testing.T) {
 
 	header := app.renderHeader()
 
-	// Header should contain simple text
-	if !strings.Contains(header, "PRDMonitor") {
-		t.Error("renderHeader should return PRDMonitor text for narrow terminal")
+	// Header should contain simple text (with space between PRD and Monitor)
+	if !strings.Contains(header, "PRD Monitor") {
+		t.Error("renderHeader should return PRD Monitor text for narrow terminal")
 	}
 
-	// Should NOT contain full ASCII art
-	if strings.Contains(header, "╔═╗╦═╗╔╦╗") {
+	// Should NOT contain ASCII art block characters
+	if strings.Contains(header, "██████╗") {
 		t.Error("renderHeader should not return ASCII art for narrow terminal")
 	}
 }
@@ -3238,10 +3238,11 @@ func TestBoard_SetSize_AccountsForASCIIArtHeight_WideTerminal(t *testing.T) {
 	board := NewBoard([]*parser.ParseResult{})
 	board.SetSize(100, 40) // Wide terminal
 
-	// With ASCII art: 3 lines + 1 top padding + 1 margin = 5 lines header
+	// With ASCII art: 6 lines + TopPadding (2) + 1 margin = 9 lines header
 	// Footer: 2 lines + 1 margin = 3 lines
-	// Total reserved: 8 lines
-	expectedMaxHeight := 40 - 8
+	// BottomPadding: 2 lines
+	// Total reserved: 6 + TopPadding + 1 + 3 + BottomPadding = 14 lines
+	expectedMaxHeight := 40 - 14
 
 	for _, col := range board.columns {
 		if col.height > expectedMaxHeight {
@@ -3255,10 +3256,11 @@ func TestBoard_SetSize_AccountsForSimpleHeaderHeight_NarrowTerminal(t *testing.T
 	board := NewBoard([]*parser.ParseResult{})
 	board.SetSize(MinWidthForASCIIArt-10, 40) // Narrow terminal
 
-	// With simple header: 1 line + 1 top padding + 1 margin = 3 lines header
+	// With simple header: 1 line + TopPadding (2) + 1 margin = 4 lines header
 	// Footer: 2 lines + 1 margin = 3 lines
-	// Total reserved: 6 lines
-	expectedMaxHeight := 40 - 6
+	// BottomPadding: 2 lines
+	// Total reserved: 1 + TopPadding + 1 + 3 + BottomPadding = 9 lines
+	expectedMaxHeight := 40 - 9
 
 	for _, col := range board.columns {
 		if col.height > expectedMaxHeight {
@@ -3268,20 +3270,20 @@ func TestBoard_SetSize_AccountsForSimpleHeaderHeight_NarrowTerminal(t *testing.T
 }
 
 func TestASCIIArtTitle_ContainsPRDMonitor(t *testing.T) {
-	// The ASCII art should represent "PRDMonitor"
+	// The ASCII art should represent "PRD Monitor"
 	// This is a visual check - the letters P R D M o n i t o r should be discernible
 	fullArt := strings.Join(ASCIIArtTitle, "")
 
-	// The art uses box-drawing characters, so we check for the distinctive characters
-	// P uses ╔═╗ and ╠═╝
-	if !strings.Contains(fullArt, "╔═╗") || !strings.Contains(fullArt, "╠═╝") {
-		t.Error("ASCII art should contain P-like character pattern")
+	// The art uses block characters in an isometric/3D style
+	// Check for distinctive block patterns
+	if !strings.Contains(fullArt, "██████╗") || !strings.Contains(fullArt, "╚═╝") {
+		t.Error("ASCII art should contain characteristic block and box patterns")
 	}
 
 	// The art should be consistent (no partial characters)
 	// Use rune count, not byte count, since box-drawing chars are multi-byte UTF-8
 	totalRunes := len([]rune(fullArt))
-	expectedRunes := ASCIIArtWidth * 3
+	expectedRunes := ASCIIArtWidth * 6 // 6 lines now
 	if totalRunes != expectedRunes {
 		t.Errorf("ASCII art total rune length should be %d, got %d", expectedRunes, totalRunes)
 	}
@@ -3310,7 +3312,7 @@ func TestApp_View_TitleDoesNotInterfereWithBoard(t *testing.T) {
 	view := app.View()
 
 	// Both the ASCII art and card content should be visible
-	if !strings.Contains(view, "╔═╗") {
+	if !strings.Contains(view, "██████╗") {
 		t.Error("view should contain ASCII art header")
 	}
 
@@ -3433,8 +3435,9 @@ func TestBoard_SetSize_AccountsForBottomPadding(t *testing.T) {
 	testHeight := 40
 	board.SetSize(100, testHeight)
 
-	// With wide terminal (ASCII art), reserved lines should be 8 + BottomPadding = 9
-	expectedReservedLines := 8 + BottomPadding
+	// With wide terminal (ASCII art): 6 lines + TopPadding + 1 margin + 3 footer + BottomPadding
+	// Total reserved = 6 + TopPadding + 1 + 3 + BottomPadding = 6 + 2 + 1 + 3 + 2 = 14
+	expectedReservedLines := 6 + TopPadding + 1 + 3 + BottomPadding
 	expectedColumnHeight := testHeight - expectedReservedLines
 
 	if board.columns[0].height != expectedColumnHeight {
@@ -3451,8 +3454,9 @@ func TestBoard_SetSize_NarrowTerminal_AccountsForBottomPadding(t *testing.T) {
 	testHeight := 40
 	board.SetSize(narrowWidth, testHeight)
 
-	// With narrow terminal (simple header), reserved lines should be 6 + BottomPadding = 7
-	expectedReservedLines := 6 + BottomPadding
+	// With narrow terminal (simple header): 1 line + TopPadding + 1 margin + 3 footer + BottomPadding
+	// Total reserved = 1 + TopPadding + 1 + 3 + BottomPadding = 1 + 2 + 1 + 3 + 2 = 9
+	expectedReservedLines := 1 + TopPadding + 1 + 3 + BottomPadding
 	expectedColumnHeight := testHeight - expectedReservedLines
 
 	if board.columns[0].height != expectedColumnHeight {

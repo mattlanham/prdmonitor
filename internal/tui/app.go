@@ -11,28 +11,31 @@ import (
 	"lanham/prdmonitor/internal/watcher"
 )
 
-// ASCIIArtTitle is the ASCII art representation of "PRDMonitor".
-// Uses a compact but stylish font that works well in terminals.
+// ASCIIArtTitle is the ASCII art representation of "PRD Monitor".
+// Uses a clean isometric/3D style for a distinctive professional appearance.
 var ASCIIArtTitle = []string{
-	"╔═╗╦═╗╔╦╗╔╦╗╔═╗╔╗╔╦╔╦╗╔═╗╦═╗",
-	"╠═╝╠╦╝ ║║║║║║ ║║║║║ ║ ║ ║╠╦╝",
-	"╩  ╩╚══╩╝╩ ╩╚═╝╝╚╝╩ ╩ ╚═╝╩╚═",
+	" ██████╗ ██████╗ ██████╗    ███╗   ███╗ ██████╗ ███╗   ██╗██╗████████╗ ██████╗ ██████╗ ",
+	" ██╔══██╗██╔══██╗██╔══██╗   ████╗ ████║██╔═══██╗████╗  ██║██║╚══██╔══╝██╔═══██╗██╔══██╗",
+	" ██████╔╝██████╔╝██║  ██║   ██╔████╔██║██║   ██║██╔██╗ ██║██║   ██║   ██║   ██║██████╔╝",
+	" ██╔═══╝ ██╔══██╗██║  ██║   ██║╚██╔╝██║██║   ██║██║╚██╗██║██║   ██║   ██║   ██║██╔══██╗",
+	" ██║     ██║  ██║██████╔╝   ██║ ╚═╝ ██║╚██████╔╝██║ ╚████║██║   ██║   ╚██████╔╝██║  ██║",
+	" ╚═╝     ╚═╝  ╚═╝╚═════╝    ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝",
 }
 
 // ASCIIArtWidth is the visual width of the ASCII art title in rune characters.
 // Note: Byte length varies due to Unicode box-drawing characters.
-const ASCIIArtWidth = 28
+const ASCIIArtWidth = 87
 
 // MinWidthForASCIIArt is the minimum terminal width to display the ASCII art.
 // Below this width, a simple text header is shown instead.
-const MinWidthForASCIIArt = 40
+const MinWidthForASCIIArt = 95
 
 // Padding constants for equal spacing on all sides of the content area.
 // These ensure a balanced and visually consistent layout.
 const (
 	HorizontalPadding = 2 // Left and right padding (equal)
-	TopPadding        = 1 // Top padding (from header PaddingTop)
-	BottomPadding     = 1 // Bottom padding (equal to top)
+	TopPadding        = 2 // Top padding (from header PaddingTop) - enough for logo not to be cut off
+	BottomPadding     = 2 // Bottom padding (equal to top)
 )
 
 // ReadOnlyMessage is displayed in the status bar to indicate view-only mode.
@@ -475,10 +478,10 @@ func (a *App) renderHeader() string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("39")).
-		PaddingTop(1).
+		PaddingTop(TopPadding).
 		MarginBottom(1)
 
-	return headerStyle.Render("PRDMonitor")
+	return headerStyle.Render("PRD Monitor")
 }
 
 // renderASCIIArtHeader renders the ASCII art title header.
@@ -486,7 +489,7 @@ func (a *App) renderASCIIArtHeader() string {
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("39")).
 		Bold(true).
-		PaddingTop(1).
+		PaddingTop(TopPadding).
 		MarginBottom(1)
 
 	// Join the ASCII art lines
