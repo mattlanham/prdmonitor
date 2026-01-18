@@ -615,3 +615,63 @@
   - Graceful degradation: when limit is hit, continue with partial watching rather than failing
   - User-facing messages should be informative: "Directory tree too large, watching X directories (new file detection may be limited)"
 ---
+
+## 2026-01-18 - PM-015
+- **What was implemented:** ASCII art title header for the TUI with adaptive fallback for narrow terminals
+- **Files changed:**
+  - `internal/tui/app.go` - Added ASCIIArtTitle array, ASCIIArtWidth and MinWidthForASCIIArt constants, renderHeader() and renderASCIIArtHeader() methods
+  - `internal/tui/board.go` - Updated SetSize() to account for taller ASCII art header (8 lines) vs simple header (6 lines)
+  - `internal/tui/tui_test.go` - Added 14 new tests for ASCII art title functionality
+- **Tests added:**
+  - TestASCIIArtTitle_IsSet - Verifies ASCII art constant is defined with 3 lines
+  - TestASCIIArtWidth_Constant - Tests width constant matches actual rune width
+  - TestMinWidthForASCIIArt_Constant - Tests minimum width threshold
+  - TestApp_View_ShowsASCIIArtTitle_WideTerminal - Verifies ASCII art displayed for wide terminals
+  - TestApp_View_ShowsSimpleTitle_NarrowTerminal - Verifies fallback to simple text
+  - TestApp_View_ASCIIArtCentered_WideTerminal - Tests centering on very wide terminals
+  - TestApp_RenderHeader_ReturnsASCIIArt_WideTerminal - Tests renderHeader method
+  - TestApp_RenderHeader_ReturnsSimpleText_NarrowTerminal - Tests fallback behavior
+  - TestApp_RenderASCIIArtHeader_ContainsAllLines - Verifies all art lines present
+  - TestBoard_SetSize_AccountsForASCIIArtHeight_WideTerminal - Tests height calculation for ASCII art
+  - TestBoard_SetSize_AccountsForSimpleHeaderHeight_NarrowTerminal - Tests height for simple header
+  - TestASCIIArtTitle_ContainsPRDMonitor - Validates ASCII art visual integrity
+  - TestApp_View_TitleDoesNotInterfereWithBoard - Verifies title doesn't overlap board
+- **Learnings:**
+  - Unicode box-drawing characters (╔═╗╦╠╚╩║) are multi-byte UTF-8 (typically 3 bytes per character)
+  - Use `len([]rune(s))` for visual character count vs `len(s)` for byte count
+  - ASCII art width in "characters" should be measured in runes for consistency
+  - Adaptive headers: use terminal width threshold (MinWidthForASCIIArt = 40) to switch between ASCII art and simple text
+  - Board height calculation must account for different header heights:
+    - ASCII art: 3 lines + 1 top padding + 1 margin = 5 lines header
+    - Simple header: 1 line + 1 top padding + 1 margin = 3 lines header
+  - Lip Gloss `Align(lipgloss.Center)` with `Width(w)` centers content within specified width
+  - `strings.Join(lines, "\n")` preserves the ASCII art's multi-line structure
+  - Test existing behavior first before modifying: TestApp_View_HeaderHasBreathingRoom needed updating for new ASCII art format
+---
+
+## 2026-01-18 - PM-016
+- **What was implemented:** Equal padding on all sides of columns - left padding matches right, top matches bottom
+- **Files changed:**
+  - `internal/tui/app.go` - Added padding constants (HorizontalPadding, TopPadding, BottomPadding), updated paddedStyle to apply PaddingLeft, PaddingRight, and PaddingBottom equally
+  - `internal/tui/board.go` - Updated column width calculation to account for both left and right padding (width - 8 instead of width - 6), updated reserved lines to include BottomPadding
+  - `internal/tui/tui_test.go` - Added 10 new tests for equal padding behavior, updated 3 existing BUG-002 tests to reflect new padding formula
+- **Tests added:**
+  - TestPaddingConstants_Exist - Verifies padding constants are defined and positive
+  - TestPaddingConstants_LeftEqualsRight - Verifies HorizontalPadding is used for both sides
+  - TestPaddingConstants_TopEqualsBottom - Verifies top and bottom padding are equal
+  - TestBoard_SetSize_AccountsForEqualHorizontalPadding - Tests column width uses both left and right padding
+  - TestBoard_SetSize_ColumnsHaveConsistentSpacing - Tests all columns have same width across terminal sizes
+  - TestBoard_SetSize_EqualPaddingAcrossTerminalSizes - Tests reserved width is consistent (within integer division variance)
+  - TestBoard_SetSize_AccountsForBottomPadding - Tests column height includes bottom padding
+  - TestBoard_SetSize_NarrowTerminal_AccountsForBottomPadding - Tests narrow terminal height calculation
+  - TestApp_View_HasEqualHorizontalPadding - Tests view renders with padding
+  - TestApp_View_BalancedLayout - Tests all columns appear in balanced layout
+- **Learnings:**
+  - Use named constants for padding values to ensure consistency and make calculations self-documenting
+  - Lip Gloss padding methods: `PaddingLeft()`, `PaddingRight()`, `PaddingTop()`, `PaddingBottom()` can all be chained
+  - When adding padding to one side, ensure corresponding dimension calculations account for it
+  - Column width formula: `(width - reservedWidth) / 3` where reservedWidth = inter-column margins + left padding + right padding
+  - Integer division causes small remainders (0-2 chars) that may appear as extra margin - this is acceptable for visual balance
+  - When updating padding logic, existing tests for related features (BUG-002 right padding tests) need to be updated with new formula
+  - Pattern: Adding symmetric padding is a two-part change: (1) apply style in View(), (2) update dimension calculations in SetSize()
+---

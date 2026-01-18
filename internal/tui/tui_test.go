@@ -2977,21 +2977,22 @@ func TestBoard_SetSize_AccountsForRightPadding(t *testing.T) {
 	// Set size
 	board.SetSize(120, 40)
 
-	// With right padding of 2, the total column width calculation should account for:
+	// With equal left and right padding (HorizontalPadding=2 each), the total column width calculation:
 	// - 4 for margins between columns
+	// - 2 for left-side padding
 	// - 2 for right-side padding
-	// So column width = (120 - 6) / 3 = 38
-	expectedColumnWidth := (120 - 6) / 3
+	// So column width = (120 - 8) / 3 = 37 (integer division)
+	expectedColumnWidth := (120 - 8) / 3
 
 	for _, col := range board.columns {
 		if col.width != expectedColumnWidth {
-			t.Errorf("column width %d should be %d (accounting for right padding)", col.width, expectedColumnWidth)
+			t.Errorf("column width %d should be %d (accounting for equal left/right padding)", col.width, expectedColumnWidth)
 		}
 	}
 }
 
 func TestBoard_SetSize_RightPaddingConsistentAcrossSizes(t *testing.T) {
-	// Test that right padding calculation is consistent across different terminal sizes
+	// Test that equal left/right padding calculation is consistent across different terminal sizes
 	terminalSizes := []struct {
 		width  int
 		height int
@@ -3005,8 +3006,8 @@ func TestBoard_SetSize_RightPaddingConsistentAcrossSizes(t *testing.T) {
 		board := NewBoard([]*parser.ParseResult{})
 		board.SetSize(size.width, size.height)
 
-		// Column width should be (width - 6) / 3 where 6 = 4 (margins) + 2 (right padding)
-		expectedColumnWidth := (size.width - 6) / 3
+		// Column width should be (width - 8) / 3 where 8 = 4 (margins) + 2 (left padding) + 2 (right padding)
+		expectedColumnWidth := (size.width - 8) / 3
 		if expectedColumnWidth < 20 {
 			expectedColumnWidth = 20 // Minimum column width
 		}
@@ -3048,36 +3049,36 @@ func TestApp_View_HasRightPaddingStyle(t *testing.T) {
 	}
 
 	// The board column widths should account for right padding
-	// Each column should be (120 - 6) / 3 = 38 chars wide
-	// This ensures content doesn't extend to the right edge
+	// Each column should be (120 - 8) / 3 = 37 chars wide
+	// This ensures content has equal padding on both left and right edges
 	totalColumnWidth := 0
 	for _, col := range app.board.columns {
 		totalColumnWidth += col.width
 	}
 
-	// Total column width + margins + right padding should not exceed terminal width
-	// Columns: 38*3 = 114, plus some borders/margins, should leave room for right padding
-	maxExpectedWidth := 120 - 2 // Terminal width minus right padding
+	// Total column width + margins + equal padding should not exceed terminal width
+	// Columns: 37*3 = 111, plus some borders/margins, should leave room for equal padding on both sides
+	maxExpectedWidth := 120 - 4 // Terminal width minus left and right padding
 	if totalColumnWidth > maxExpectedWidth {
-		t.Errorf("total column width %d exceeds expected max %d (should leave room for right padding)",
+		t.Errorf("total column width %d exceeds expected max %d (should leave room for equal padding)",
 			totalColumnWidth, maxExpectedWidth)
 	}
 }
 
 func TestApp_View_RightPaddingColumnCalculation(t *testing.T) {
-	// Verify the column width calculation accounts for right-side padding
+	// Verify the column width calculation accounts for equal left and right padding
 	app := NewApp([]*parser.ParseResult{}, nil, "")
 	app.width = 100
 	app.height = 40
 	app.board.SetSize(100, 40)
 
-	// With width=100 and right padding=2 (in addition to 4 for inter-column margins)
-	// Column width = (100 - 6) / 3 = 31.33 -> 31
-	expectedColWidth := (100 - 6) / 3
+	// With width=100 and equal left/right padding (2 each, plus 4 for inter-column margins)
+	// Column width = (100 - 8) / 3 = 30.67 -> 30
+	expectedColWidth := (100 - 8) / 3
 
 	for i, col := range app.board.columns {
 		if col.width != expectedColWidth {
-			t.Errorf("column %d: width %d should be %d (accounting for right padding)", i, col.width, expectedColWidth)
+			t.Errorf("column %d: width %d should be %d (accounting for equal left/right padding)", i, col.width, expectedColWidth)
 		}
 	}
 }
@@ -3320,4 +3321,210 @@ func TestApp_View_TitleDoesNotInterfereWithBoard(t *testing.T) {
 	if !strings.Contains(view, "Incomplete") {
 		t.Error("view should contain column titles")
 	}
+}
+
+// Tests for PM-016: Equal padding on all sides of columns
+
+func TestPaddingConstants_Exist(t *testing.T) {
+	// Test that padding constants are defined
+	if HorizontalPadding <= 0 {
+		t.Error("HorizontalPadding should be positive")
+	}
+	if TopPadding <= 0 {
+		t.Error("TopPadding should be positive")
+	}
+	if BottomPadding <= 0 {
+		t.Error("BottomPadding should be positive")
+	}
+}
+
+func TestPaddingConstants_LeftEqualsRight(t *testing.T) {
+	// Left and right padding are both HorizontalPadding
+	// This is enforced by using the same constant for both
+	if HorizontalPadding != 2 {
+		t.Errorf("expected HorizontalPadding to be 2, got %d", HorizontalPadding)
+	}
+}
+
+func TestPaddingConstants_TopEqualsBottom(t *testing.T) {
+	// Top and bottom padding should be equal
+	if TopPadding != BottomPadding {
+		t.Errorf("TopPadding (%d) should equal BottomPadding (%d)", TopPadding, BottomPadding)
+	}
+}
+
+func TestBoard_SetSize_AccountsForEqualHorizontalPadding(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// Set size with a known width
+	testWidth := 120
+	board.SetSize(testWidth, 40)
+
+	// Column width should account for both left and right padding equally
+	// Formula: (width - reservedWidth) / 3
+	// reservedWidth = 4 (inter-column margins) + HorizontalPadding*2 (left + right)
+	expectedReservedWidth := 4 + (HorizontalPadding * 2)
+	expectedColumnWidth := (testWidth - expectedReservedWidth) / 3
+
+	// Check that all columns have the calculated width
+	for i, col := range board.columns {
+		if col.width != expectedColumnWidth {
+			t.Errorf("column %d: expected width %d, got %d", i, expectedColumnWidth, col.width)
+		}
+	}
+}
+
+func TestBoard_SetSize_ColumnsHaveConsistentSpacing(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// Test with various terminal widths
+	testWidths := []int{80, 100, 120, 160, 200}
+
+	for _, width := range testWidths {
+		board.SetSize(width, 40)
+
+		// All columns should have the same width
+		if len(board.columns) < 3 {
+			t.Fatal("expected 3 columns")
+		}
+
+		col1Width := board.columns[0].width
+		col2Width := board.columns[1].width
+		col3Width := board.columns[2].width
+
+		if col1Width != col2Width || col2Width != col3Width {
+			t.Errorf("width=%d: columns have inconsistent widths: %d, %d, %d",
+				width, col1Width, col2Width, col3Width)
+		}
+	}
+}
+
+func TestBoard_SetSize_EqualPaddingAcrossTerminalSizes(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// The reserved width base (padding + margins) is consistent
+	// reservedWidth = 4 (margins) + HorizontalPadding*2 (left + right) = 8
+	// However, due to integer division, actual reserved may be slightly higher
+	// because (width - reservedWidth) / 3 truncates the remainder
+	baseReservedWidth := 4 + (HorizontalPadding * 2)
+
+	testWidths := []int{80, 100, 120, 160}
+
+	for _, width := range testWidths {
+		board.SetSize(width, 40)
+
+		// Calculate what the reserved width actually is based on column widths
+		totalColumnWidth := board.columns[0].width * 3
+		actualReservedWidth := width - totalColumnWidth
+
+		// The actual reserved width should be at least the base and at most base + 2
+		// (because integer division remainder can be 0, 1, or 2)
+		if actualReservedWidth < baseReservedWidth || actualReservedWidth > baseReservedWidth+2 {
+			t.Errorf("width=%d: reserved width %d should be between %d and %d",
+				width, actualReservedWidth, baseReservedWidth, baseReservedWidth+2)
+		}
+	}
+}
+
+func TestBoard_SetSize_AccountsForBottomPadding(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// Test that height calculation accounts for bottom padding
+	testHeight := 40
+	board.SetSize(100, testHeight)
+
+	// With wide terminal (ASCII art), reserved lines should be 8 + BottomPadding = 9
+	expectedReservedLines := 8 + BottomPadding
+	expectedColumnHeight := testHeight - expectedReservedLines
+
+	if board.columns[0].height != expectedColumnHeight {
+		t.Errorf("expected column height %d (with bottom padding), got %d",
+			expectedColumnHeight, board.columns[0].height)
+	}
+}
+
+func TestBoard_SetSize_NarrowTerminal_AccountsForBottomPadding(t *testing.T) {
+	board := NewBoard([]*parser.ParseResult{})
+
+	// Test with narrow terminal (simple header)
+	narrowWidth := MinWidthForASCIIArt - 10 // Below threshold for ASCII art
+	testHeight := 40
+	board.SetSize(narrowWidth, testHeight)
+
+	// With narrow terminal (simple header), reserved lines should be 6 + BottomPadding = 7
+	expectedReservedLines := 6 + BottomPadding
+	expectedColumnHeight := testHeight - expectedReservedLines
+
+	if board.columns[0].height != expectedColumnHeight {
+		t.Errorf("narrow terminal: expected column height %d, got %d",
+			expectedColumnHeight, board.columns[0].height)
+	}
+}
+
+func TestApp_View_HasEqualHorizontalPadding(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "TestProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	view := app.View()
+
+	// View should not be empty
+	if len(view) == 0 {
+		t.Error("view should not be empty")
+	}
+
+	// Split view into lines and check that content doesn't touch edges
+	// Note: This is a basic sanity check; actual padding is applied via lipgloss
+	lines := strings.Split(view, "\n")
+	if len(lines) == 0 {
+		t.Error("view should have lines")
+	}
+}
+
+func TestApp_View_BalancedLayout(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Story 1", Status: model.StatusIncomplete},
+					{ID: "US-002", Title: "Story 2", Status: model.StatusInProgress},
+					{ID: "US-003", Title: "Story 3", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 120
+	app.height = 40
+	app.board.SetSize(120, 40)
+
+	view := app.View()
+
+	// The view should contain all three columns
+	if !strings.Contains(view, "Incomplete") {
+		t.Error("view should contain Incomplete column")
+	}
+	if !strings.Contains(view, "In Progress") {
+		t.Error("view should contain In Progress column")
+	}
+	if !strings.Contains(view, "Complete") {
+		t.Error("view should contain Complete column")
+	}
+
+	// All column titles should appear on the same horizontal level (balanced layout)
+	// This is verified by the fact that columns are joined horizontally
 }

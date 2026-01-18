@@ -27,6 +27,14 @@ const ASCIIArtWidth = 28
 // Below this width, a simple text header is shown instead.
 const MinWidthForASCIIArt = 40
 
+// Padding constants for equal spacing on all sides of the content area.
+// These ensure a balanced and visually consistent layout.
+const (
+	HorizontalPadding = 2 // Left and right padding (equal)
+	TopPadding        = 1 // Top padding (from header PaddingTop)
+	BottomPadding     = 1 // Bottom padding (equal to top)
+)
+
 // ReadOnlyMessage is displayed in the status bar to indicate view-only mode.
 const ReadOnlyMessage = "VIEW-ONLY"
 
@@ -312,10 +320,13 @@ func (a *App) View() string {
 	// Combine status bar and help message
 	footer := lipgloss.JoinVertical(lipgloss.Left, statusBar, helpMsg)
 
-	// Base view with right-side padding
+	// Base view with equal padding on all sides
 	// Apply padding to the entire content area for breathing room from terminal edge
+	// Left and right padding are equal (HorizontalPadding), bottom matches top (from header style)
 	paddedStyle := lipgloss.NewStyle().
-		PaddingRight(2)
+		PaddingLeft(HorizontalPadding).
+		PaddingRight(HorizontalPadding).
+		PaddingBottom(BottomPadding)
 
 	baseView := paddedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer))
 

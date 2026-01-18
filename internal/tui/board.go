@@ -156,24 +156,26 @@ func (b *Board) SetSize(width, height int) {
 	b.width = width
 	b.height = height
 
-	// Reserve space for header and footer:
-	// - ASCII art header: 3 lines + 1 top padding + 1 margin = 5 lines (when width >= MinWidthForASCIIArt)
-	// - Simple header: 1 line + 1 top padding + 1 margin = 3 lines (narrow terminals)
+	// Reserve space for header, footer, and padding:
+	// - ASCII art header: 3 lines + TopPadding + 1 margin = 5 lines (when width >= MinWidthForASCIIArt)
+	// - Simple header: 1 line + TopPadding + 1 margin = 3 lines (narrow terminals)
 	// - Footer: 2 lines (status bar + help message) + 1 margin = 3 lines
-	// Total: 8 lines for ASCII art, 6 lines for simple header
-	// Use 8 to account for ASCII art (worst case)
-	reservedLines := 8
+	// - Bottom padding: BottomPadding line (to match top padding)
+	// Total: 9 lines for ASCII art, 7 lines for simple header
+	// Use 9 to account for ASCII art (worst case)
+	reservedLines := 8 + BottomPadding
 	if width < MinWidthForASCIIArt {
-		reservedLines = 6
+		reservedLines = 6 + BottomPadding
 	}
 	availableHeight := height - reservedLines
 	if availableHeight < 5 {
 		availableHeight = 5
 	}
 
-	// Distribute width evenly across columns with some padding
-	// Reserve 6 total: 4 for margins between columns + 2 for right-side padding
-	columnWidth := (width - 6) / 3
+	// Distribute width evenly across columns with equal padding on both sides
+	// Reserve: 4 for margins between columns + HorizontalPadding*2 for left and right padding
+	reservedWidth := 4 + (HorizontalPadding * 2)
+	columnWidth := (width - reservedWidth) / 3
 	if columnWidth < 20 {
 		columnWidth = 20
 	}
