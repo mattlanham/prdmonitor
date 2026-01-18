@@ -4495,3 +4495,259 @@ func TestApp_FilterPersistsDuringSession(t *testing.T) {
 		t.Errorf("filter should persist after resize, got %q", app.projectFilter)
 	}
 }
+
+// PM-021: Active project filter indicator tests
+
+func TestFilterIndicatorPrefix_Constant(t *testing.T) {
+	// Verify the constant exists and has expected value
+	if FilterIndicatorPrefix == "" {
+		t.Error("FilterIndicatorPrefix should not be empty")
+	}
+	if FilterIndicatorPrefix != "Filtered: " {
+		t.Errorf("FilterIndicatorPrefix should be 'Filtered: ', got %q", FilterIndicatorPrefix)
+	}
+}
+
+func TestApp_IsFilterActive_AllProjects(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "Project1",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+
+	// Default filter is "All Projects", should not be active
+	if app.IsFilterActive() {
+		t.Error("filter should not be active when set to 'All Projects'")
+	}
+
+	// Empty filter should also not be active
+	app.projectFilter = ""
+	if app.IsFilterActive() {
+		t.Error("filter should not be active when filter is empty")
+	}
+}
+
+func TestApp_IsFilterActive_SpecificProject(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "MyProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.projectFilter = "MyProject"
+
+	if !app.IsFilterActive() {
+		t.Error("filter should be active when set to a specific project")
+	}
+}
+
+func TestApp_RenderFilterIndicator_NotShownForAllProjects(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "Project1",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+
+	// Default filter is "All Projects"
+	indicator := app.renderFilterIndicator()
+	if indicator != "" {
+		t.Errorf("indicator should be empty for 'All Projects', got %q", indicator)
+	}
+
+	// Explicitly set to AllProjectsFilter
+	app.projectFilter = AllProjectsFilter
+	indicator = app.renderFilterIndicator()
+	if indicator != "" {
+		t.Errorf("indicator should be empty for AllProjectsFilter, got %q", indicator)
+	}
+
+	// Empty filter
+	app.projectFilter = ""
+	indicator = app.renderFilterIndicator()
+	if indicator != "" {
+		t.Errorf("indicator should be empty for empty filter, got %q", indicator)
+	}
+}
+
+func TestApp_RenderFilterIndicator_ShownForActiveFilter(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "MyProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.projectFilter = "MyProject"
+
+	indicator := app.renderFilterIndicator()
+
+	// Should contain the prefix and project name
+	if !strings.Contains(indicator, FilterIndicatorPrefix) {
+		t.Errorf("indicator should contain prefix %q, got %q", FilterIndicatorPrefix, indicator)
+	}
+	if !strings.Contains(indicator, "MyProject") {
+		t.Errorf("indicator should contain project name 'MyProject', got %q", indicator)
+	}
+}
+
+func TestApp_View_ShowsFilterIndicatorInHeader_WhenFilterActive(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "FilteredProject",
+				UserStories: []model.UserStory{
+					{ID: "FP-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	app.projectFilter = "FilteredProject"
+	app.rebuildBoard()
+
+	view := app.View()
+
+	// Should contain the filter indicator with prefix
+	if !strings.Contains(view, "Filtered:") {
+		t.Error("view should show filter indicator with 'Filtered:' prefix when filter is active")
+	}
+	if !strings.Contains(view, "FilteredProject") {
+		t.Error("view should show the filtered project name")
+	}
+}
+
+func TestApp_View_HidesFilterIndicator_WhenNoFilter(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	// Default is AllProjectsFilter
+
+	view := app.View()
+
+	// Should NOT contain the filter indicator prefix (which is distinct from status bar "Filter:")
+	if strings.Contains(view, FilterIndicatorPrefix) {
+		t.Errorf("view should NOT show 'Filtered: ' when filter is All Projects")
+	}
+}
+
+func TestApp_View_FilterIndicatorDisappearsWhenCleared(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "MyProject",
+				UserStories: []model.UserStory{
+					{ID: "MP-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Set filter active
+	app.projectFilter = "MyProject"
+	app.rebuildBoard()
+
+	view := app.View()
+	if !strings.Contains(view, "Filtered:") {
+		t.Error("view should show filter indicator when filter is active")
+	}
+
+	// Clear filter to "All Projects"
+	app.projectFilter = AllProjectsFilter
+	app.rebuildBoard()
+
+	view = app.View()
+	if strings.Contains(view, "Filtered:") {
+		t.Error("view should NOT show 'Filtered:' indicator when filter is cleared to All Projects")
+	}
+}
+
+func TestApp_View_FilterIndicatorVisibleInHeaderArea(t *testing.T) {
+	// This test verifies the indicator appears between the header and the board
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "VisibleProject",
+				UserStories: []model.UserStory{
+					{ID: "VP-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	app.projectFilter = "VisibleProject"
+	app.rebuildBoard()
+
+	view := app.View()
+
+	// The indicator should appear somewhere in the view
+	// We check that "Filtered:" appears in the output
+	if !strings.Contains(view, "Filtered:") {
+		t.Error("filter indicator should be visible in header area")
+	}
+
+	// The indicator should also appear before the board content (columns)
+	filterPos := strings.Index(view, "Filtered:")
+	incompletePos := strings.Index(view, "Incomplete")
+
+	if filterPos > incompletePos && incompletePos >= 0 {
+		t.Error("filter indicator should appear before the Incomplete column header")
+	}
+}

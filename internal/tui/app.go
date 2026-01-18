@@ -45,6 +45,9 @@ const ReadOnlyMessage = "VIEW-ONLY"
 // EditHelpMessage is displayed to guide users on how to make changes.
 const EditHelpMessage = "Edit prd.json files directly to make changes"
 
+// FilterIndicatorPrefix is the prefix for the filter indicator badge.
+const FilterIndicatorPrefix = "Filtered: "
+
 // FileChangedMsg is sent when a watched file changes.
 type FileChangedMsg struct {
 	FilePath string
@@ -407,6 +410,17 @@ func (a *App) View() string {
 	// Header with ASCII art title or fallback text for narrow terminals
 	header := a.renderHeader()
 
+	// Filter indicator (shown when filter is active)
+	filterIndicator := a.renderFilterIndicator()
+	if filterIndicator != "" {
+		// Center the filter indicator
+		indicatorStyle := lipgloss.NewStyle().
+			Width(a.width - 4).
+			Align(lipgloss.Center).
+			MarginBottom(1)
+		filterIndicator = indicatorStyle.Render(filterIndicator)
+	}
+
 	// Board view
 	boardView := a.board.View()
 
@@ -441,7 +455,15 @@ func (a *App) View() string {
 		PaddingRight(HorizontalPadding).
 		PaddingBottom(BottomPadding)
 
-	baseView := paddedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer))
+	// Build content with optional filter indicator between header and board
+	var contentParts []string
+	contentParts = append(contentParts, header)
+	if filterIndicator != "" {
+		contentParts = append(contentParts, filterIndicator)
+	}
+	contentParts = append(contentParts, boardView, footer)
+
+	baseView := paddedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, contentParts...))
 
 	// Overlay help if showing
 	if a.showHelp {
@@ -502,6 +524,29 @@ func (a *App) renderASCIIArtHeader() string {
 	}
 
 	return titleStyle.Render(artLines)
+}
+
+// renderFilterIndicator renders the filter indicator badge when a filter is active.
+// Returns empty string when no filter is active (i.e., showing all projects).
+func (a *App) renderFilterIndicator() string {
+	// Don't show indicator when "All Projects" is selected or filter is empty
+	if a.projectFilter == "" || a.projectFilter == AllProjectsFilter {
+		return ""
+	}
+
+	// Create a prominent badge style with background color
+	badgeStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")).   // Black text
+		Background(lipgloss.Color("220")). // Yellow background for visibility
+		Bold(true).
+		Padding(0, 1)
+
+	return badgeStyle.Render(FilterIndicatorPrefix + a.projectFilter)
+}
+
+// IsFilterActive returns true when a project filter is active (not "All Projects").
+func (a *App) IsFilterActive() bool {
+	return a.projectFilter != "" && a.projectFilter != AllProjectsFilter
 }
 
 // renderWithOverlay renders an overlay centered on top of the base view.
