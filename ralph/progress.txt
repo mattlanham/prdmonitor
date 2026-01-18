@@ -78,6 +78,14 @@
 - `RenderWithStyle(width, style)` for custom styling
 - Card layout: Project name at top, Story ID (prominent), Title (bold), Description (truncated)
 
+### Read-Only Interface Pattern
+- Use constants for status messages (e.g., `ReadOnlyMessage`, `EditHelpMessage`) for testability
+- Status bar at bottom shows mode indicator and shortcuts
+- Include helpful message guiding users to edit source files directly
+- Explicitly handle and ignore edit-related keybindings (e, i, d, x, enter, backspace, delete)
+- Return `nil` cmd from Update() to indicate "no action" for ignored keys
+- `tea.KeyMsg` has specific types: `tea.KeyEnter`, `tea.KeyBackspace`, `tea.KeyDelete` vs. `tea.KeyRunes`
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -301,4 +309,24 @@
     - Move operation type switch BEFORE debounce check to skip irrelevant events early
   - Empty fsnotify events (Name == "") occur when watcher is closing - filter them out
   - Directory watching with `WatchDirectory()` sets `watchNewDirs` flag for new file detection mode
+---
+
+## 2026-01-18 - PM-009
+- **What was implemented:** Read-only board interface with status bar and help messages
+- **Files changed:**
+  - `internal/tui/app.go` - Added ReadOnlyMessage and EditHelpMessage constants, enhanced footer with status bar and help message, explicitly ignore edit keybindings
+  - `internal/tui/tui_test.go` - Added 6 new tests for read-only functionality
+- **Tests added:**
+  - TestReadOnlyMessage_Constant - Verifies read-only message constant exists
+  - TestEditHelpMessage_Constant - Verifies edit help message mentions prd.json
+  - TestApp_View_ContainsReadOnlyIndicator - Tests status bar displays VIEW-ONLY
+  - TestApp_View_ContainsEditHelpMessage - Tests footer shows prd.json editing guidance
+  - TestApp_Update_IgnoresEditKeyBindings - Tests e, i, d, x, enter, backspace, delete keys are ignored
+  - TestApp_Update_QuitStillWorks - Tests q key still quits in read-only mode
+- **Learnings:**
+  - Read-only enforcement is twofold: (1) don't implement edit features, (2) explicitly ignore edit keybindings
+  - Use constants for status messages to make them testable and consistent
+  - `tea.KeyMsg` has specific types for special keys (KeyEnter, KeyBackspace, KeyDelete) vs. KeyRunes for letters
+  - The footer/status bar should have both the mode indicator AND helpful guidance for users
+  - Returning `nil` cmd from Update() is proper way to indicate "no action" for ignored keys
 ---
