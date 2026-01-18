@@ -389,6 +389,35 @@
       "priority": 28,
       "status": "complete",
       "updatedAt": "2026-01-18T00:00:00Z"
+    },
+    {
+      "id": "BUG-004",
+      "title": "Filter selections not applied when closing filter overlay",
+      "description": "As a user, I expect the board to update with my filter selections when I close the filter overlay, but it was only updating when pressing Enter, not when pressing Esc or 'f' to close.",
+      "acceptanceCriteria": [
+        "Board rebuilds with filter applied when closing filter via Esc key",
+        "Board rebuilds with filter applied when closing filter via 'f' key toggle",
+        "Board rebuilds with filter applied when closing filter via Enter key",
+        "Filter selections are consistently applied regardless of how the overlay is closed"
+      ],
+      "priority": 29,
+      "status": "complete",
+      "updatedAt": "2026-01-18T00:00:00Z"
+    },
+    {
+      "id": "BUG-005",
+      "title": "Cards show yellow animation highlight when closing filter overlay",
+      "description": "As a user, I expect cards to appear normal when closing the filter overlay, but all cards were showing yellow borders (animation style) because the animation system was incorrectly triggered during filter operations.",
+      "acceptanceCriteria": [
+        "No animation highlighting after closing the filter overlay",
+        "Split rebuildBoard into two methods: one for filter changes (no animations) and one for file changes (with animations)",
+        "Filter operations use rebuildBoard() which skips animations",
+        "File change operations use rebuildBoardWithAnimations() to highlight moved cards",
+        "Selection is cleared when filter closes so no card is highlighted"
+      ],
+      "priority": 30,
+      "status": "complete",
+      "updatedAt": "2026-01-18T00:00:00Z"
     }
   ]
 }

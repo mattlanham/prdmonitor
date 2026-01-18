@@ -107,8 +107,21 @@ func extractProjectNames(parseResults []*parser.ParseResult) []string {
 }
 
 // rebuildBoard rebuilds the board with the current filter applied.
-// Returns true if any cards moved between columns (animations were triggered).
+// This is used for filter changes - no animations are triggered.
 func (a *App) rebuildBoard() bool {
+	// Rebuild the board with current filter state
+	a.board = NewBoardWithFilterState(a.parseResults, a.filterOverlay.FilterState())
+	a.board.SetSize(a.width, a.height)
+
+	// Reset selection to first column, no card selected (-1)
+	a.board.ClearSelection()
+
+	return false
+}
+
+// rebuildBoardWithAnimations rebuilds the board and applies animations for cards that moved.
+// This is used for file changes where we want to highlight moved cards.
+func (a *App) rebuildBoardWithAnimations() bool {
 	// Capture current card positions before rebuild
 	oldPositions := a.board.GetCardPositions()
 
@@ -182,6 +195,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if a.showFilter {
 				a.showFilter = false
+				a.rebuildBoard() // Apply filter when closing
 				return a, nil
 			}
 			if a.showHelp {
@@ -212,7 +226,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.showHelp {
 				a.showHelp = false
 			}
+			wasShowing := a.showFilter
 			a.showFilter = !a.showFilter
+			// Rebuild board when closing filter to apply changes
+			if wasShowing && !a.showFilter {
+				a.rebuildBoard()
+			}
 			return a, nil
 		}
 
@@ -410,8 +429,8 @@ func (a *App) handleFileChange(msg FileChangedMsg) bool {
 		// Update project list in filter overlay
 		a.filterOverlay.UpdateProjects(extractProjectNames(a.parseResults))
 
-		// Rebuild the board with current filter (returns true if animations started)
-		return a.rebuildBoard()
+		// Rebuild the board with animations for moved cards
+		return a.rebuildBoardWithAnimations()
 
 	case watcher.OpDelete:
 		// Remove the deleted file from parse results
@@ -425,8 +444,8 @@ func (a *App) handleFileChange(msg FileChangedMsg) bool {
 		// Update project list in filter overlay (also removes deleted projects from selection)
 		a.filterOverlay.UpdateProjects(extractProjectNames(a.parseResults))
 
-		// Rebuild the board with current filter (returns true if animations started)
-		return a.rebuildBoard()
+		// Rebuild the board with animations for moved cards
+		return a.rebuildBoardWithAnimations()
 	}
 	return false
 }

@@ -236,6 +236,37 @@ func (b *Board) SelectedCardIndex() int {
 	return b.selectedCard
 }
 
+// SetSelection sets the selected column and card index, clamping to valid ranges.
+func (b *Board) SetSelection(col, card int) {
+	// Clamp column to valid range
+	if col < 0 {
+		col = 0
+	}
+	if col >= len(b.columns) {
+		col = len(b.columns) - 1
+	}
+	b.selectedCol = col
+
+	// Clamp card to valid range for the selected column
+	if card < 0 {
+		card = 0
+	}
+	maxCard := len(b.columns[b.selectedCol].cards) - 1
+	if maxCard < 0 {
+		maxCard = 0
+	}
+	if card > maxCard {
+		card = maxCard
+	}
+	b.selectedCard = card
+}
+
+// ClearSelection resets the selection to no card selected.
+func (b *Board) ClearSelection() {
+	b.selectedCol = 0
+	b.selectedCard = -1
+}
+
 // ScrollColumnUp scrolls the specified column up by one card.
 func (b *Board) ScrollColumnUp(colIndex int) {
 	if colIndex >= 0 && colIndex < len(b.columns) {
