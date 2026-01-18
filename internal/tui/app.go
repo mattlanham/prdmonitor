@@ -3,6 +3,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -104,9 +105,19 @@ func extractProjectNames(parseResults []*parser.ParseResult) []string {
 }
 
 // rebuildBoard rebuilds the board with the current filter applied.
-func (a *App) rebuildBoard() {
+// Returns true if any cards moved between columns (animations were triggered).
+func (a *App) rebuildBoard() bool {
+	// Capture current card positions before rebuild
+	oldPositions := a.board.GetCardPositions()
+
+	// Rebuild the board
 	a.board = NewBoardWithFilter(a.parseResults, a.projectFilter)
 	a.board.SetSize(a.width, a.height)
+
+	// Apply animations to cards that moved columns
+	a.board.ApplyAnimations(oldPositions)
+
+	return a.board.HasAnimatingCards()
 }
 
 // Init implements tea.Model.
@@ -119,6 +130,16 @@ func (a *App) Init() tea.Cmd {
 
 // WatcherStoppedMsg is sent when the file watcher has been stopped.
 type WatcherStoppedMsg struct{}
+
+// AnimationTickMsg is sent periodically to update card animations.
+type AnimationTickMsg time.Time
+
+// animationTickCmd returns a command that sends an AnimationTickMsg after a short delay.
+func animationTickCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return AnimationTickMsg(t)
+	})
+}
 
 // listenForFileChanges returns a command that listens for file change events.
 // It handles closed channels gracefully when the watcher is stopped.
@@ -302,9 +323,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FileChangedMsg:
 		// Re-parse the changed file and update the board
-		a.handleFileChange(msg)
+		hasAnimations := a.handleFileChange(msg)
 		// Continue listening for more file changes
+		// If animations are running, also start animation ticks
+		if hasAnimations {
+			return a, tea.Batch(a.listenForFileChanges(), animationTickCmd())
+		}
 		return a, a.listenForFileChanges()
+
+	case AnimationTickMsg:
+		// Update animations - clear expired ones
+		a.board.ClearExpiredAnimations()
+		// If animations are still running, continue ticking
+		if a.board.HasAnimatingCards() {
+			return a, animationTickCmd()
+		}
+		return a, nil
 
 	case WatcherStoppedMsg:
 		// Watcher has been stopped, no need to listen for more changes
@@ -338,14 +372,15 @@ func (a *App) handleMouseEvent(msg tea.MouseMsg) {
 }
 
 // handleFileChange processes a file change event and updates the board.
-func (a *App) handleFileChange(msg FileChangedMsg) {
+// Returns true if any cards moved columns (animations were triggered).
+func (a *App) handleFileChange(msg FileChangedMsg) bool {
 	switch msg.Op {
 	case watcher.OpModify, watcher.OpCreate:
 		// Re-parse the modified/created file
 		result, err := parser.ParseFile(msg.FilePath)
 		if err != nil {
 			// Ignore parse errors (file may be temporarily invalid during save)
-			return
+			return false
 		}
 
 		// Find and update the existing result or add new one
@@ -364,8 +399,8 @@ func (a *App) handleFileChange(msg FileChangedMsg) {
 		// Update project list in filter overlay
 		a.filterOverlay.UpdateProjects(extractProjectNames(a.parseResults))
 
-		// Rebuild the board with current filter
-		a.rebuildBoard()
+		// Rebuild the board with current filter (returns true if animations started)
+		return a.rebuildBoard()
 
 	case watcher.OpDelete:
 		// Remove the deleted file from parse results
@@ -396,9 +431,10 @@ func (a *App) handleFileChange(msg FileChangedMsg) {
 			a.filterOverlay.SelectProject(AllProjectsFilter)
 		}
 
-		// Rebuild the board with current filter
-		a.rebuildBoard()
+		// Rebuild the board with current filter (returns true if animations started)
+		return a.rebuildBoard()
 	}
+	return false
 }
 
 // View implements tea.Model.

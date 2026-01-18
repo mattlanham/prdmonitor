@@ -4874,3 +4874,434 @@ func TestApp_View_FilterIndicatorVisibleInHeaderArea(t *testing.T) {
 		t.Error("filter indicator should appear before the Incomplete column header")
 	}
 }
+
+// Card movement animation tests for PM-023
+
+func TestAnimationDuration_Constant(t *testing.T) {
+	// Animation duration should be under 1 second per acceptance criteria
+	if AnimationDuration >= 1*time.Second {
+		t.Errorf("AnimationDuration (%v) should be under 1 second", AnimationDuration)
+	}
+
+	// Should be long enough to be noticeable
+	if AnimationDuration < 100*time.Millisecond {
+		t.Errorf("AnimationDuration (%v) should be at least 100ms to be noticeable", AnimationDuration)
+	}
+}
+
+func TestAnimatingCardStyle_IsDifferent(t *testing.T) {
+	defaultStyle := DefaultCardStyle()
+	animatingStyle := AnimatingCardStyle()
+
+	// Animating style should have a different border color for visibility
+	if animatingStyle.BorderColor == defaultStyle.BorderColor {
+		t.Error("AnimatingCardStyle border color should be different from default")
+	}
+}
+
+func TestCard_StartAnimation(t *testing.T) {
+	card := &Card{
+		ProjectName: "Test",
+		Story:       model.UserStory{ID: "US-001"},
+	}
+
+	// Initially not animating
+	if card.Animating {
+		t.Error("card should not be animating initially")
+	}
+
+	// Start animation
+	card.StartAnimation()
+
+	if !card.Animating {
+		t.Error("card should be animating after StartAnimation")
+	}
+
+	if card.AnimStart.IsZero() {
+		t.Error("AnimStart should be set after StartAnimation")
+	}
+}
+
+func TestCard_StopAnimation(t *testing.T) {
+	card := &Card{
+		ProjectName: "Test",
+		Story:       model.UserStory{ID: "US-001"},
+	}
+
+	// Start then stop animation
+	card.StartAnimation()
+	card.StopAnimation()
+
+	if card.Animating {
+		t.Error("card should not be animating after StopAnimation")
+	}
+
+	if !card.AnimStart.IsZero() {
+		t.Error("AnimStart should be zero after StopAnimation")
+	}
+}
+
+func TestCard_IsAnimating_ReturnsTrue(t *testing.T) {
+	card := &Card{
+		ProjectName: "Test",
+		Story:       model.UserStory{ID: "US-001"},
+	}
+
+	card.StartAnimation()
+
+	// Should be animating immediately after start
+	if !card.IsAnimating() {
+		t.Error("IsAnimating should return true immediately after StartAnimation")
+	}
+}
+
+func TestCard_IsAnimating_ReturnsFalse_WhenNotStarted(t *testing.T) {
+	card := &Card{
+		ProjectName: "Test",
+		Story:       model.UserStory{ID: "US-001"},
+	}
+
+	// Should not be animating when not started
+	if card.IsAnimating() {
+		t.Error("IsAnimating should return false when animation not started")
+	}
+}
+
+func TestCard_IsAnimating_ReturnsFalse_WhenExpired(t *testing.T) {
+	card := &Card{
+		ProjectName: "Test",
+		Story:       model.UserStory{ID: "US-001"},
+	}
+
+	// Start animation with a time in the past (beyond animation duration)
+	card.Animating = true
+	card.AnimStart = time.Now().Add(-2 * AnimationDuration)
+
+	// Should not be animating because duration has passed
+	if card.IsAnimating() {
+		t.Error("IsAnimating should return false when animation has expired")
+	}
+}
+
+func TestCard_RenderSelected_UsesAnimatingStyle(t *testing.T) {
+	card := &Card{
+		ProjectName: "Test",
+		Story:       model.UserStory{ID: "US-001", Title: "Test Story"},
+	}
+
+	// Start animation
+	card.StartAnimation()
+
+	// Render the card (not selected)
+	rendered := card.RenderSelected(40, false)
+
+	// The animation style should be applied
+	// We can't easily check the exact style, but we can verify it renders
+	if !strings.Contains(rendered, "US-001") {
+		t.Error("rendered card should contain story ID")
+	}
+}
+
+func TestBoard_GetCardPositions(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+					{ID: "US-002", Status: model.StatusInProgress},
+					{ID: "US-003", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+	positions := board.GetCardPositions()
+
+	// Check card positions
+	if positions["Project1:US-001"] != "incomplete" {
+		t.Errorf("US-001 should be in incomplete column, got %q", positions["Project1:US-001"])
+	}
+	if positions["Project1:US-002"] != "in-progress" {
+		t.Errorf("US-002 should be in in-progress column, got %q", positions["Project1:US-002"])
+	}
+	if positions["Project1:US-003"] != "complete" {
+		t.Errorf("US-003 should be in complete column, got %q", positions["Project1:US-003"])
+	}
+}
+
+func TestBoard_ApplyAnimations_DetectsMovement(t *testing.T) {
+	// Create initial board with cards in specific columns
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Simulate the card having been in in-progress column before
+	oldPositions := map[string]string{
+		"Project1:US-001": "in-progress", // Was in-progress, now incomplete
+	}
+
+	// Apply animations
+	board.ApplyAnimations(oldPositions)
+
+	// The card should now be animating
+	card := board.columns[0].cards[0] // Incomplete column
+	if !card.IsAnimating() {
+		t.Error("card should be animating after moving from in-progress to incomplete")
+	}
+}
+
+func TestBoard_ApplyAnimations_NoAnimationForSameColumn(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Card was in incomplete and is still in incomplete
+	oldPositions := map[string]string{
+		"Project1:US-001": "incomplete",
+	}
+
+	board.ApplyAnimations(oldPositions)
+
+	// Card should NOT be animating
+	card := board.columns[0].cards[0]
+	if card.IsAnimating() {
+		t.Error("card should not animate when it stays in the same column")
+	}
+}
+
+func TestBoard_ApplyAnimations_NoAnimationForNewCards(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Empty old positions (card is new)
+	oldPositions := map[string]string{}
+
+	board.ApplyAnimations(oldPositions)
+
+	// New cards should NOT animate
+	card := board.columns[0].cards[0]
+	if card.IsAnimating() {
+		t.Error("new cards should not animate")
+	}
+}
+
+func TestBoard_HasAnimatingCards(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Initially no animating cards
+	if board.HasAnimatingCards() {
+		t.Error("board should have no animating cards initially")
+	}
+
+	// Start animation on a card
+	board.columns[0].cards[0].StartAnimation()
+
+	if !board.HasAnimatingCards() {
+		t.Error("board should have animating cards after StartAnimation")
+	}
+}
+
+func TestBoard_ClearExpiredAnimations(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Set up an expired animation
+	card := board.columns[0].cards[0]
+	card.Animating = true
+	card.AnimStart = time.Now().Add(-2 * AnimationDuration) // Expired
+
+	// Clear expired animations
+	board.ClearExpiredAnimations()
+
+	// Animation should be stopped
+	if card.Animating {
+		t.Error("expired animation should be cleared")
+	}
+}
+
+func TestApp_Update_AnimationTickMsg(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Start animation
+	app.board.columns[0].cards[0].StartAnimation()
+
+	// Send animation tick
+	msg := AnimationTickMsg(time.Now())
+	_, cmd := app.Update(msg)
+
+	// Should return another tick command since animation is still running
+	if cmd == nil {
+		t.Error("should return tick command while animations are running")
+	}
+}
+
+func TestApp_Update_AnimationTickMsg_StopsWhenNoAnimations(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// No animations running
+
+	// Send animation tick
+	msg := AnimationTickMsg(time.Now())
+	_, cmd := app.Update(msg)
+
+	// Should NOT return a tick command since no animations
+	if cmd != nil {
+		t.Error("should return nil command when no animations are running")
+	}
+}
+
+func TestAnimation_WorksForStatusUpgrade(t *testing.T) {
+	// Test card moving from incomplete to in-progress (upgrade)
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Card was incomplete before
+	oldPositions := map[string]string{
+		"Project1:US-001": "incomplete",
+	}
+
+	board.ApplyAnimations(oldPositions)
+
+	// Card should animate (it moved from incomplete to in-progress)
+	card := board.columns[1].cards[0] // In Progress column
+	if !card.IsAnimating() {
+		t.Error("card should animate when moving from incomplete to in-progress")
+	}
+}
+
+func TestAnimation_WorksForStatusDowngrade(t *testing.T) {
+	// Test card moving from complete back to in-progress (downgrade)
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Card was complete before
+	oldPositions := map[string]string{
+		"Project1:US-001": "complete",
+	}
+
+	board.ApplyAnimations(oldPositions)
+
+	// Card should animate (it moved from complete to in-progress)
+	card := board.columns[1].cards[0] // In Progress column
+	if !card.IsAnimating() {
+		t.Error("card should animate when moving from complete to in-progress")
+	}
+}
+
+func TestAnimationTickMsg_Type(t *testing.T) {
+	// Verify AnimationTickMsg implements tea.Msg
+	var msg tea.Msg = AnimationTickMsg(time.Now())
+
+	if _, ok := msg.(AnimationTickMsg); !ok {
+		t.Error("AnimationTickMsg should implement tea.Msg")
+	}
+}

@@ -331,7 +331,7 @@
         "Date changed is tracked based on file modification time or story content changes"
       ],
       "priority": 24,
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "id": "PM-023",
@@ -344,7 +344,7 @@
         "Animation works for both status upgrades and downgrades"
       ],
       "priority": 25,
-      "status": "incomplete"
+      "status": "complete"
     }
   ]
 }

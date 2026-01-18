@@ -15,6 +15,8 @@ type Card struct {
 	ProjectName string
 	Story       model.UserStory
 	ModTime     time.Time // Last modification time of the source prd.json file
+	Animating   bool      // Whether this card is currently animating (just moved columns)
+	AnimStart   time.Time // When the animation started
 }
 
 // CardStyle holds the styling configuration for a card.
@@ -42,15 +44,53 @@ func DefaultCardStyle() CardStyle {
 	}
 }
 
+// AnimatingCardStyle returns the styling for a card that is animating (just moved columns).
+// Uses a bright highlight border to draw attention to the card movement.
+func AnimatingCardStyle() CardStyle {
+	return CardStyle{
+		BorderColor:      lipgloss.Color("220"), // Yellow/gold border for animation highlight
+		ProjectColor:     lipgloss.Color("39"),  // Cyan for project name
+		IDColor:          lipgloss.Color("205"), // Pink for ID (prominent)
+		TitleColor:       lipgloss.Color("255"), // White/bright for title
+		DescriptionColor: lipgloss.Color("247"), // Light gray for description
+	}
+}
+
+// AnimationDuration is how long card movement animations last.
+const AnimationDuration = 800 * time.Millisecond
+
+// IsAnimating returns true if the card is currently animating.
+func (c *Card) IsAnimating() bool {
+	if !c.Animating {
+		return false
+	}
+	// Check if animation has expired
+	return time.Since(c.AnimStart) < AnimationDuration
+}
+
+// StartAnimation marks this card as animating (e.g., when it moves between columns).
+func (c *Card) StartAnimation() {
+	c.Animating = true
+	c.AnimStart = time.Now()
+}
+
+// StopAnimation clears the animation state.
+func (c *Card) StopAnimation() {
+	c.Animating = false
+	c.AnimStart = time.Time{}
+}
+
 // Render renders the card with the given width.
 func (c *Card) Render(width int) string {
 	return c.RenderWithStyle(width, DefaultCardStyle())
 }
 
-// RenderSelected renders the card with selection highlighting.
+// RenderSelected renders the card with selection highlighting or animation.
 func (c *Card) RenderSelected(width int, isSelected bool) string {
 	style := DefaultCardStyle()
-	if isSelected {
+	if c.IsAnimating() {
+		style = AnimatingCardStyle()
+	} else if isSelected {
 		style = SelectedCardStyle()
 	}
 	return c.RenderWithStyle(width, style)

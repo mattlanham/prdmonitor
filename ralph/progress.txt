@@ -169,6 +169,22 @@
 - All stories from the same prd.json file share the same ModTime
 - Sorting updates automatically when files are re-parsed (on file change detection)
 
+### Card Animation Pattern
+- Cards animate briefly when moving between columns (status change detected)
+- Animation state tracked per card: `Animating bool`, `AnimStart time.Time`
+- `AnimationDuration` constant (800ms) - short enough to not disrupt, noticeable enough to see
+- `AnimatingCardStyle()` returns yellow/gold border color for visibility
+- `Card.IsAnimating()` checks if animation is active (not expired)
+- `Card.StartAnimation()` / `Card.StopAnimation()` manage animation state
+- `Board.GetCardPositions()` returns map of "project:storyID" → column status
+- `Board.ApplyAnimations(oldPositions)` compares old vs new positions, triggers animations
+- `Board.HasAnimatingCards()` / `ClearExpiredAnimations()` for animation lifecycle
+- `AnimationTickMsg` and `animationTickCmd()` for Bubble Tea tick loop
+- Animation tick runs at 100ms interval while animations are active
+- `rebuildBoard()` returns bool indicating if animations started
+- New cards do NOT animate - only cards that move columns
+- Works for both status upgrades (incomplete→in-progress) and downgrades (complete→in-progress)
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -902,4 +918,46 @@
   - Keep old sorting method (`SortByPriority()`) available for backward compatibility and alternative use cases
   - Use explicit constructor (`NewCardWithModTime`) vs modifying existing one to maintain backward compatibility
   - Test file modification time with small delays on some file systems with coarse granularity (1-second resolution)
+---
+
+## 2026-01-18 - PM-023
+- **What was implemented:** Card movement animation - cards briefly highlight with a yellow border when they move between columns
+- **Files changed:**
+  - `internal/tui/card.go` - Added `Animating` and `AnimStart` fields to Card struct, added `AnimatingCardStyle()`, `AnimationDuration` constant (800ms), `IsAnimating()`, `StartAnimation()`, `StopAnimation()` methods, updated `RenderSelected()` to use animation styling
+  - `internal/tui/board.go` - Added `CardPosition` struct, `GetCardPositions()`, `ApplyAnimations()`, `HasAnimatingCards()`, `ClearExpiredAnimations()` methods for tracking and applying animations
+  - `internal/tui/app.go` - Added `AnimationTickMsg` type and `animationTickCmd()` function, updated `rebuildBoard()` to return bool and apply animations, updated `handleFileChange()` to trigger animations and start tick loop, added `AnimationTickMsg` case in Update() to clear expired animations
+  - `internal/tui/tui_test.go` - Added 23 new tests for animation functionality
+- **Tests added:**
+  - TestAnimationDuration_Constant - Tests duration is under 1 second and at least 100ms
+  - TestAnimatingCardStyle_IsDifferent - Tests animation style has different border color
+  - TestCard_StartAnimation - Tests animation start sets flags and time
+  - TestCard_StopAnimation - Tests animation stop clears flags
+  - TestCard_IsAnimating_ReturnsTrue - Tests IsAnimating immediately after start
+  - TestCard_IsAnimating_ReturnsFalse_WhenNotStarted - Tests not animating when never started
+  - TestCard_IsAnimating_ReturnsFalse_WhenExpired - Tests animation expires after duration
+  - TestCard_RenderSelected_UsesAnimatingStyle - Tests animated card renders correctly
+  - TestBoard_GetCardPositions - Tests capturing card positions by column
+  - TestBoard_ApplyAnimations_DetectsMovement - Tests animation triggers on column change
+  - TestBoard_ApplyAnimations_NoAnimationForSameColumn - Tests no animation when card stays
+  - TestBoard_ApplyAnimations_NoAnimationForNewCards - Tests new cards don't animate
+  - TestBoard_HasAnimatingCards - Tests detecting if any card is animating
+  - TestBoard_ClearExpiredAnimations - Tests clearing expired animations
+  - TestApp_Update_AnimationTickMsg - Tests tick continues while animating
+  - TestApp_Update_AnimationTickMsg_StopsWhenNoAnimations - Tests tick stops when done
+  - TestAnimation_WorksForStatusUpgrade - Tests animation for incomplete→in-progress
+  - TestAnimation_WorksForStatusDowngrade - Tests animation for complete→in-progress
+  - TestAnimationTickMsg_Type - Tests message implements tea.Msg
+- **Learnings:**
+  - Animation pattern: track state on each card (`Animating`, `AnimStart`) rather than board-level
+  - Use `time.Since(startTime) < duration` to check if animation is still active
+  - Bubble Tea tick pattern: `tea.Tick(duration, func(t time.Time) tea.Msg { return CustomMsg(t) })`
+  - Track card positions before rebuild using map with "project:storyID" key
+  - Compare old vs new positions after rebuild to detect which cards moved columns
+  - Return `tea.Batch(cmd1, cmd2)` to run multiple commands (file listening + animation tick)
+  - Animation tick frequency (100ms) provides smooth visual updates without excessive CPU usage
+  - Animation duration (800ms) is short enough to be non-disruptive but long enough to be noticeable
+  - Highlight/border color animation is subtle but effective for drawing attention to changes
+  - New cards should NOT animate - only cards that move between columns
+  - `rebuildBoard()` now returns bool indicating if animations started, enabling conditional tick
+  - Test animation expiry by setting `AnimStart` to past time: `time.Now().Add(-2 * AnimationDuration)`
 ---

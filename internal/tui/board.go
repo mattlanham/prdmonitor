@@ -17,6 +17,72 @@ type Board struct {
 	selectedCard int // Currently selected card index within the column
 }
 
+// CardPosition represents the location of a card on the board.
+type CardPosition struct {
+	ProjectName string
+	StoryID     string
+	Status      string // The status/column where the card is located
+}
+
+// GetCardPositions returns the current position (status) of all cards on the board.
+// The map key is "projectName:storyID" for efficient lookup.
+func (b *Board) GetCardPositions() map[string]string {
+	positions := make(map[string]string)
+	statusNames := []string{"incomplete", "in-progress", "complete"}
+
+	for i, col := range b.columns {
+		status := statusNames[i]
+		for _, card := range col.cards {
+			key := card.ProjectName + ":" + card.Story.ID
+			positions[key] = status
+		}
+	}
+	return positions
+}
+
+// ApplyAnimations marks cards as animating if they moved from a different column.
+// oldPositions is the result of GetCardPositions() from before the rebuild.
+func (b *Board) ApplyAnimations(oldPositions map[string]string) {
+	statusNames := []string{"incomplete", "in-progress", "complete"}
+
+	for i, col := range b.columns {
+		currentStatus := statusNames[i]
+		for _, card := range col.cards {
+			key := card.ProjectName + ":" + card.Story.ID
+			if oldStatus, exists := oldPositions[key]; exists {
+				// Card existed before - check if it moved
+				if oldStatus != currentStatus {
+					card.StartAnimation()
+				}
+			}
+			// New cards don't animate - they just appear
+		}
+	}
+}
+
+// HasAnimatingCards returns true if any card on the board is currently animating.
+func (b *Board) HasAnimatingCards() bool {
+	for _, col := range b.columns {
+		for _, card := range col.cards {
+			if card.IsAnimating() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ClearExpiredAnimations stops animations on cards whose animation duration has passed.
+func (b *Board) ClearExpiredAnimations() {
+	for _, col := range b.columns {
+		for _, card := range col.cards {
+			if card.Animating && !card.IsAnimating() {
+				card.StopAnimation()
+			}
+		}
+	}
+}
+
 // AllProjectsFilter is imported from filter.go - use this constant value for "no filter"
 const allProjectsFilterValue = "All Projects"
 
