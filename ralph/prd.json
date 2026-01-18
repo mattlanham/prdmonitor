@@ -293,6 +293,58 @@
       ],
       "priority": 21,
       "status": "complete"
+    },
+    {
+      "id": "PM-020",
+      "title": "Smaller logo with top padding",
+      "description": "As a user, I want the ASCII art logo to be smaller and have padding above it so that more space is available for the Kanban board content.",
+      "acceptanceCriteria": [
+        "Logo is reduced in size while remaining legible",
+        "There is visible padding/spacing above the logo",
+        "Logo does not dominate the screen on smaller terminals",
+        "Overall layout feels more balanced with the smaller logo"
+      ],
+      "priority": 22,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-021",
+      "title": "Active project filter indicator",
+      "description": "As a user, I want a visual indicator when a project filter is active so that I know I'm viewing a filtered subset of stories.",
+      "acceptanceCriteria": [
+        "A clear indicator is displayed when a project filter is active",
+        "The indicator shows which project is currently being filtered",
+        "Indicator is visible in the header, status bar, or other prominent location",
+        "Indicator disappears when filter is cleared or set to 'All Projects'"
+      ],
+      "priority": 23,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-022",
+      "title": "Sort cards by date changed",
+      "description": "As a user, I want cards in each column to be ordered by the date they were last changed so that the most recently updated stories appear at the top.",
+      "acceptanceCriteria": [
+        "Cards are sorted by last modification date within each column",
+        "Most recently changed cards appear at the top of their column",
+        "Sorting updates automatically when prd.json files change",
+        "Date changed is tracked based on file modification time or story content changes"
+      ],
+      "priority": 24,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-023",
+      "title": "Card movement animation",
+      "description": "As a user, I want a brief animation when a card moves between columns so that I can easily notice when a story's status has changed.",
+      "acceptanceCriteria": [
+        "Cards animate briefly when moving to a different column",
+        "Animation is subtle but noticeable (e.g., highlight, flash, or slide effect)",
+        "Animation duration is short (under 1 second) to avoid disruption",
+        "Animation works for both status upgrades and downgrades"
+      ],
+      "priority": 25,
+      "status": "incomplete"
     }
   ]
 }
