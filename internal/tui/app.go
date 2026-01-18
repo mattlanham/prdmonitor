@@ -9,6 +9,12 @@ import (
 	"lanham/prdmonitor/internal/watcher"
 )
 
+// ReadOnlyMessage is displayed in the status bar to indicate view-only mode.
+const ReadOnlyMessage = "VIEW-ONLY"
+
+// EditHelpMessage is displayed to guide users on how to make changes.
+const EditHelpMessage = "Edit prd.json files directly to make changes"
+
 // FileChangedMsg is sent when a watched file changes.
 type FileChangedMsg struct {
 	FilePath string
@@ -60,12 +66,20 @@ func (a *App) listenForFileChanges() tea.Cmd {
 }
 
 // Update implements tea.Model.
+// The board is read-only - cards cannot be moved or edited via keyboard or mouse.
+// All edit-related keybindings are intentionally ignored.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return a, tea.Quit
+
+		// Explicitly ignore common edit keybindings to reinforce read-only mode
+		// Users must edit prd.json files directly to make changes
+		case "e", "i", "d", "x", "enter", "backspace", "delete":
+			// No-op: board is view-only
+			return a, nil
 		}
 
 	case tea.WindowSizeMsg:
@@ -143,12 +157,22 @@ func (a *App) View() string {
 	// Board view
 	boardView := a.board.View()
 
-	// Footer with status bar
-	footerStyle := lipgloss.NewStyle().
+	// Status bar indicating view-only mode
+	statusBarStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
 		MarginTop(1)
 
-	footer := footerStyle.Render("View-only mode | q: quit | ?: help")
+	statusBar := statusBarStyle.Render(ReadOnlyMessage + " | q: quit | ?: help")
+
+	// Help message for editing
+	helpMsgStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("243")).
+		Italic(true)
+
+	helpMsg := helpMsgStyle.Render(EditHelpMessage)
+
+	// Combine status bar and help message
+	footer := lipgloss.JoinVertical(lipgloss.Left, statusBar, helpMsg)
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, boardView, footer)
 }

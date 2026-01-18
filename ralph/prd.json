@@ -119,7 +119,7 @@
         "Helpful message suggests editing prd.json files directly"
       ],
       "priority": 8,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-010",

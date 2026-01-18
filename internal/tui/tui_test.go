@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"lanham/prdmonitor/internal/model"
 	"lanham/prdmonitor/internal/parser"
 )
@@ -649,5 +651,102 @@ func TestNewBoard_SortsAcrossMultipleProjects(t *testing.T) {
 	if inProgressCol.cards[1].Story.ID != "A-001" {
 		t.Errorf("expected second card to be A-001 (priority 5), got %s (priority %d)",
 			inProgressCol.cards[1].Story.ID, inProgressCol.cards[1].Story.Priority)
+	}
+}
+
+// Read-only interface tests for PM-009
+
+func TestReadOnlyMessage_Constant(t *testing.T) {
+	// Verify the read-only message constant is set
+	if ReadOnlyMessage == "" {
+		t.Error("ReadOnlyMessage constant should not be empty")
+	}
+
+	// Should indicate view-only mode
+	if !strings.Contains(strings.ToLower(ReadOnlyMessage), "view") && !strings.Contains(strings.ToLower(ReadOnlyMessage), "only") {
+		t.Error("ReadOnlyMessage should indicate view-only mode")
+	}
+}
+
+func TestEditHelpMessage_Constant(t *testing.T) {
+	// Verify the edit help message constant is set
+	if EditHelpMessage == "" {
+		t.Error("EditHelpMessage constant should not be empty")
+	}
+
+	// Should mention editing prd.json files
+	if !strings.Contains(strings.ToLower(EditHelpMessage), "prd.json") {
+		t.Error("EditHelpMessage should mention prd.json files")
+	}
+
+	// Should suggest editing directly
+	if !strings.Contains(strings.ToLower(EditHelpMessage), "edit") {
+		t.Error("EditHelpMessage should suggest editing")
+	}
+}
+
+func TestApp_View_ContainsReadOnlyIndicator(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	view := app.View()
+
+	// Check that the view contains the read-only indicator
+	if !strings.Contains(view, ReadOnlyMessage) {
+		t.Error("App view should contain the ReadOnlyMessage indicator")
+	}
+}
+
+func TestApp_View_ContainsEditHelpMessage(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	view := app.View()
+
+	// Check that the view contains the edit help message
+	if !strings.Contains(view, EditHelpMessage) {
+		t.Error("App view should contain the EditHelpMessage")
+	}
+}
+
+func TestApp_Update_IgnoresEditKeyBindings(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// List of keybindings that should be ignored (no action taken)
+	editKeys := []string{"e", "i", "d", "x", "enter", "backspace", "delete"}
+
+	for _, key := range editKeys {
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+		if key == "enter" {
+			msg = tea.KeyMsg{Type: tea.KeyEnter}
+		} else if key == "backspace" {
+			msg = tea.KeyMsg{Type: tea.KeyBackspace}
+		} else if key == "delete" {
+			msg = tea.KeyMsg{Type: tea.KeyDelete}
+		}
+
+		_, cmd := app.Update(msg)
+
+		// Edit keybindings should return nil command (no action)
+		if cmd != nil {
+			t.Errorf("key '%s' should be ignored (return nil cmd) in read-only mode", key)
+		}
+	}
+}
+
+func TestApp_Update_QuitStillWorks(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// 'q' should still quit
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}
+	_, cmd := app.Update(msg)
+
+	// Quit should return a command
+	if cmd == nil {
+		t.Error("'q' key should still trigger quit in read-only mode")
 	}
 }
