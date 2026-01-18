@@ -546,3 +546,23 @@
   - Testing padding: can check for leading whitespace/newlines or verify content position is not at index 0
   - Bug fixes often involve small targeted changes (1 line of padding code) but need corresponding adjustments in dependent calculations
 ---
+
+## 2026-01-18 - BUG-002
+- **What was implemented:** Right-side padding for TUI to add breathing room from the terminal edge
+- **Files changed:**
+  - `internal/tui/app.go` - Added `PaddingRight(2)` style to the base view
+  - `internal/tui/board.go` - Updated column width calculation from `(width - 4) / 3` to `(width - 6) / 3` to account for right padding
+  - `internal/tui/tui_test.go` - Added 4 new tests for right-side padding behavior
+- **Tests added:**
+  - TestBoard_SetSize_AccountsForRightPadding - Tests column width calculation accounts for right padding
+  - TestBoard_SetSize_RightPaddingConsistentAcrossSizes - Tests padding consistency across terminal sizes
+  - TestApp_View_HasRightPaddingStyle - Verifies view renders with right padding
+  - TestApp_View_RightPaddingColumnCalculation - Tests column width formula with padding
+- **Learnings:**
+  - Lip Gloss `PaddingRight(n)` adds horizontal spacing to the right of content
+  - Right padding implementation is two-part: (1) apply style in View(), (2) adjust width calculations in SetSize()
+  - Width calculation pattern: `columnWidth = (totalWidth - reservedSpace) / numColumns` where reserved includes inter-column margins AND edge padding
+  - String length in rendered output includes ANSI escape codes (colors), so testing visual width differs from byte length
+  - Tests for visual padding should focus on computed dimensions (column widths) rather than raw string lengths
+  - Similar pattern to BUG-001 (top padding): small style change + corresponding dimension adjustment
+---
