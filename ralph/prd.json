@@ -106,7 +106,7 @@
         "Detection occurs within 5 seconds of file creation"
       ],
       "priority": 7,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-009",

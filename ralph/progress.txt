@@ -49,6 +49,7 @@
 ### Watcher Package (fsnotify)
 - `watcher.New()` creates a new file watcher
 - `watcher.AddFile(path)` / `watcher.AddFiles(paths)` to watch files
+- `watcher.WatchDirectory(rootDir)` recursively watches directory tree for new prd.json files
 - Watches parent directories since fsnotify works better with directories
 - Filters events to only watched files (ignores other files in same directory)
 - `watcher.Events()` returns channel for receiving `Event` structs
@@ -57,6 +58,15 @@
 - Debouncing: 100ms between events for the same file to handle rapid saves
 - Operation types: `OpModify`, `OpCreate`, `OpDelete`
 - Use `defer w.Stop()` in main.go for proper cleanup
+- **Path Resolution**: Use `filepath.EvalSymlinks()` to resolve symlinks for consistent path comparison
+  - Critical on macOS where `/var` is symlink to `/private/var`
+  - fsnotify reports resolved paths, so stored paths must also be resolved
+- **New File Detection**: `WatchDirectory()` enables detecting new prd.json files
+  - Watches all subdirectories recursively
+  - Detects new directories and adds them to watch list
+  - Only emits events for files named exactly "prd.json"
+- **Debounce Ordering**: Check operation type BEFORE debouncing
+  - Prevents irrelevant events (like CHMOD) from affecting debounce timing for WRITE events
 
 ### Card Component Pattern
 - Separate `card.go` file for the Card component per AGENTS.md project structure
@@ -266,4 +276,29 @@
   - After handling a FileChangedMsg, must return another listenForFileChanges() cmd to continue listening
   - When updating function signatures, check all call sites including test files
   - Graceful degradation: if watcher fails to start, continue without file watching
+---
+
+## 2026-01-18 - PM-008
+- **What was implemented:** New file detection for prd.json files in existing and new subdirectories
+- **Files changed:**
+  - `internal/watcher/watcher.go` - Added `resolvePath()` helper, `WatchDirectory()`, `handleNewFileOrDirectory()`, `watchNewDirectory()`. Fixed debounce ordering bug.
+  - `internal/watcher/watcher_test.go` - Added 5 new tests for new file detection, updated existing tests to use resolved paths
+  - `ralph/progress.txt` - Updated Watcher Package patterns with new file detection documentation
+- **Tests added:**
+  - TestResolvePath - Tests symlink resolution for consistent path handling
+  - TestWatchDirectory - Tests recursive directory watching
+  - TestWatcher_DetectsNewPrdJsonFile - Tests new prd.json file detection in root directory
+  - TestWatcher_DetectsNewSubdirectoryWithPrdJson - Tests detection in newly created subdirectories
+  - TestWatcher_IgnoresNonPrdJsonFiles - Tests that only prd.json files trigger events
+  - TestWatcher_DetectsNewPrdJsonInExistingSubdirectory - Tests detection in pre-existing subdirectories
+- **Learnings:**
+  - macOS `/var` is a symlink to `/private/var` - must use `filepath.EvalSymlinks()` for path resolution
+  - fsnotify reports the resolved (real) path, not the symlink path used when adding the watch
+  - Tests must use resolved paths when comparing event file paths
+  - `resolvePath()` helper should handle non-existent files by resolving the parent directory
+  - Debounce logic must check operation type BEFORE updating debounce timestamp
+    - CHMOD events from `os.WriteFile()` were incorrectly affecting WRITE event timing
+    - Move operation type switch BEFORE debounce check to skip irrelevant events early
+  - Empty fsnotify events (Name == "") occur when watcher is closing - filter them out
+  - Directory watching with `WatchDirectory()` sets `watchNewDirs` flag for new file detection mode
 ---

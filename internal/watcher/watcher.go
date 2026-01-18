@@ -2,12 +2,41 @@
 package watcher
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
+
+const prdFileName = "prd.json"
+
+// resolvePath returns the absolute path with symlinks resolved.
+// This ensures consistent path comparison on systems like macOS where
+// /var is a symlink to /private/var.
+func resolvePath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	// Resolve symlinks to get the canonical path
+	resolved, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		// If the file doesn't exist yet (e.g., for new files), return abs path
+		if os.IsNotExist(err) {
+			// Try resolving the parent directory instead
+			dir := filepath.Dir(absPath)
+			resolvedDir, dirErr := filepath.EvalSymlinks(dir)
+			if dirErr != nil {
+				return absPath, nil
+			}
+			return filepath.Join(resolvedDir, filepath.Base(absPath)), nil
+		}
+		return absPath, nil
+	}
+	return resolved, nil
+}
 
 // Event represents a file change event.
 type Event struct {
@@ -43,13 +72,15 @@ func (op Operation) String() string {
 
 // Watcher monitors prd.json files for changes.
 type Watcher struct {
-	fsWatcher *fsnotify.Watcher
-	events    chan Event
-	errors    chan error
-	done      chan struct{}
-	files     map[string]bool // Set of watched files
-	mu        sync.RWMutex
-	debounce  time.Duration // Debounce duration for rapid events
+	fsWatcher    *fsnotify.Watcher
+	events       chan Event
+	errors       chan error
+	done         chan struct{}
+	files        map[string]bool // Set of watched files
+	directories  map[string]bool // Set of watched directories (for new file detection)
+	mu           sync.RWMutex
+	debounce     time.Duration // Debounce duration for rapid events
+	watchNewDirs bool          // Whether to detect new prd.json files in directories
 }
 
 // New creates a new Watcher.
@@ -60,13 +91,70 @@ func New() (*Watcher, error) {
 	}
 
 	return &Watcher{
-		fsWatcher: fsWatcher,
-		events:    make(chan Event, 100),
-		errors:    make(chan error, 10),
-		done:      make(chan struct{}),
-		files:     make(map[string]bool),
-		debounce:  100 * time.Millisecond,
+		fsWatcher:    fsWatcher,
+		events:       make(chan Event, 100),
+		errors:       make(chan error, 10),
+		done:         make(chan struct{}),
+		files:        make(map[string]bool),
+		directories:  make(map[string]bool),
+		debounce:     100 * time.Millisecond,
+		watchNewDirs: false,
 	}, nil
+}
+
+// WatchDirectory recursively watches a directory tree for new prd.json files.
+// This enables detection of new prd.json files in existing and new subdirectories.
+func (w *Watcher) WatchDirectory(rootDir string) error {
+	absRoot, err := resolvePath(rootDir)
+	if err != nil {
+		return err
+	}
+
+	// Walk the directory tree and watch all directories
+	err = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			// Skip unreadable directories but continue walking
+			return nil
+		}
+
+		if d.IsDir() {
+			return w.addDirectory(path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	w.mu.Lock()
+	w.watchNewDirs = true
+	w.mu.Unlock()
+
+	return nil
+}
+
+// addDirectory adds a directory to be watched for new prd.json files.
+func (w *Watcher) addDirectory(dirPath string) error {
+	absPath, err := resolvePath(dirPath)
+	if err != nil {
+		return err
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Already watching this directory
+	if w.directories[absPath] {
+		return nil
+	}
+
+	if err := w.fsWatcher.Add(absPath); err != nil {
+		return err
+	}
+
+	w.directories[absPath] = true
+	return nil
 }
 
 // AddFiles adds multiple files to the watcher.
@@ -82,7 +170,7 @@ func (w *Watcher) AddFiles(files []string) error {
 // AddFile adds a single file to the watcher.
 // It watches the parent directory to catch file modifications.
 func (w *Watcher) AddFile(filePath string) error {
-	absPath, err := filepath.Abs(filePath)
+	absPath, err := resolvePath(filePath)
 	if err != nil {
 		return err
 	}
@@ -107,7 +195,7 @@ func (w *Watcher) AddFile(filePath string) error {
 
 // RemoveFile stops watching a file.
 func (w *Watcher) RemoveFile(filePath string) error {
-	absPath, err := filepath.Abs(filePath)
+	absPath, err := resolvePath(filePath)
 	if err != nil {
 		return err
 	}
@@ -146,32 +234,38 @@ func (w *Watcher) Start() {
 				return
 			}
 
-			absPath, err := filepath.Abs(event.Name)
+			// Skip empty events (closed watcher)
+			if event.Name == "" {
+				continue
+			}
+
+			absPath, err := resolvePath(event.Name)
 			if err != nil {
 				continue
 			}
 
-			// Only process events for files we're watching
+			// Check if this is a watched file
 			w.mu.RLock()
 			isWatched := w.files[absPath]
+			watchingNewDirs := w.watchNewDirs
 			w.mu.RUnlock()
+
+			// Handle new prd.json file detection
+			if !isWatched && watchingNewDirs {
+				if w.handleNewFileOrDirectory(event, absPath) {
+					continue
+				}
+				// If it's not a new prd.json or directory, skip
+				continue
+			}
 
 			if !isWatched {
 				continue
 			}
 
-			// Debounce rapid events
-			lastEventMu.Lock()
-			last, exists := lastEvent[absPath]
-			now := time.Now()
-			if exists && now.Sub(last) < w.debounce {
-				lastEventMu.Unlock()
-				continue
-			}
-			lastEvent[absPath] = now
-			lastEventMu.Unlock()
-
 			// Convert fsnotify operation to our Operation type
+			// Note: We check operation type BEFORE debouncing so that irrelevant
+			// operations (like CHMOD) don't affect the debounce timing
 			var op Operation
 			switch {
 			case event.Op&fsnotify.Write == fsnotify.Write:
@@ -184,8 +278,20 @@ func (w *Watcher) Start() {
 				// Rename is treated as delete (file may have been renamed away)
 				op = OpDelete
 			default:
+				// Skip events we don't care about (CHMOD, etc.)
 				continue
 			}
+
+			// Debounce rapid events (only for events we care about)
+			lastEventMu.Lock()
+			last, exists := lastEvent[absPath]
+			now := time.Now()
+			if exists && now.Sub(last) < w.debounce {
+				lastEventMu.Unlock()
+				continue
+			}
+			lastEvent[absPath] = now
+			lastEventMu.Unlock()
 
 			// Send the event
 			select {
@@ -205,6 +311,85 @@ func (w *Watcher) Start() {
 			}
 		}
 	}
+}
+
+// handleNewFileOrDirectory checks if the event is for a new prd.json file or a new directory.
+// Returns true if the event was handled.
+func (w *Watcher) handleNewFileOrDirectory(event fsnotify.Event, absPath string) bool {
+	// Only handle create events for new file/directory detection
+	if event.Op&fsnotify.Create != fsnotify.Create {
+		return false
+	}
+
+	// Check if it's a directory or file
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return false
+	}
+
+	if info.IsDir() {
+		// New directory created - watch it for future prd.json files
+		w.watchNewDirectory(absPath)
+		return true
+	}
+
+	// Check if it's a prd.json file
+	if filepath.Base(absPath) == prdFileName {
+		// Add to watched files and emit create event
+		w.mu.Lock()
+		w.files[absPath] = true
+		w.mu.Unlock()
+
+		select {
+		case w.events <- Event{FilePath: absPath, Op: OpCreate}:
+		default:
+			// Channel full, skip event
+		}
+		return true
+	}
+
+	return false
+}
+
+// watchNewDirectory watches a newly created directory and all its subdirectories.
+func (w *Watcher) watchNewDirectory(dirPath string) {
+	// Walk the new directory tree to watch it and find any prd.json files
+	filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		absPath, err := resolvePath(path)
+		if err != nil {
+			return nil
+		}
+
+		if d.IsDir() {
+			// Watch the directory
+			w.mu.Lock()
+			if !w.directories[absPath] {
+				w.fsWatcher.Add(absPath)
+				w.directories[absPath] = true
+			}
+			w.mu.Unlock()
+		} else if d.Name() == prdFileName {
+			// Found a prd.json file - add to watched files and emit event
+			w.mu.Lock()
+			if !w.files[absPath] {
+				w.files[absPath] = true
+				w.mu.Unlock()
+
+				select {
+				case w.events <- Event{FilePath: absPath, Op: OpCreate}:
+				default:
+				}
+			} else {
+				w.mu.Unlock()
+			}
+		}
+
+		return nil
+	})
 }
 
 // Stop stops the watcher and releases resources.

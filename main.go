@@ -123,10 +123,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: Could not watch some files: %v\n", err)
 	}
 
+	// Watch the entire directory tree for new prd.json files
+	if err := w.WatchDirectory(config.RootDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not watch directory for new files: %v\n", err)
+	}
+
 	// Start the watcher in a goroutine
 	go w.Start()
 
-	fmt.Printf("Watching %d file(s) for changes\n", len(result.Files))
+	fmt.Printf("Watching %d file(s) for changes (new files will be auto-detected)\n", len(result.Files))
 
 	// Launch the TUI with file watching
 	if err := tui.RunWithWatcher(parseResults, w, config.RootDir); err != nil {
