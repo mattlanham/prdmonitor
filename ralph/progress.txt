@@ -527,3 +527,22 @@
   - Go channels must be closed by sender, not receiver - watcher owns channels so watcher closes them
   - Testing goroutine exits: use a done channel to verify Start() returns after Stop()
 ---
+
+## 2026-01-18 - BUG-001
+- **What was implemented:** Top padding for TUI to add breathing room above the header
+- **Files changed:**
+  - `internal/tui/app.go` - Added `PaddingTop(1)` to header style
+  - `internal/tui/board.go` - Updated height calculation to account for top padding (changed from 4 to 5 reserved lines)
+  - `internal/tui/tui_test.go` - Added 4 new tests for top padding behavior
+- **Tests added:**
+  - TestApp_View_HasTopPadding - Verifies view has spacing before first content
+  - TestApp_View_TopPaddingConsistent - Tests padding consistency across terminal sizes
+  - TestBoard_SetSize_AccountsForTopPadding - Tests column height respects padding
+  - TestApp_View_HeaderHasBreathingRoom - Verifies header is not at position 0
+- **Learnings:**
+  - Lip Gloss `PaddingTop(n)` adds vertical spacing above content, applied in the render output
+  - When adding padding to header/footer, must update board's `SetSize()` to reserve additional space
+  - Height calculation: `availableHeight = height - reservedLines` where reserved includes header, padding, margins, and footer
+  - Testing padding: can check for leading whitespace/newlines or verify content position is not at index 0
+  - Bug fixes often involve small targeted changes (1 line of padding code) but need corresponding adjustments in dependent calculations
+---

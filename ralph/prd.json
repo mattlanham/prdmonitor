@@ -186,6 +186,43 @@
       ],
       "priority": 13,
       "status": "complete"
+    },
+    {
+      "id": "BUG-001",
+      "title": "Add top padding to TUI",
+      "description": "As a user, I want padding at the top of the TUI so that the content doesn't appear cramped against the top edge of the terminal.",
+      "acceptanceCriteria": [
+        "There is visible spacing between the top of the terminal and the first row of content",
+        "Padding is consistent across different terminal sizes",
+        "Header or title area has appropriate breathing room"
+      ],
+      "priority": 14,
+      "status": "complete"
+    },
+    {
+      "id": "BUG-002",
+      "title": "Add right-side padding to TUI",
+      "description": "As a user, I want padding on the right side of the TUI so that the content doesn't touch the right edge of the terminal.",
+      "acceptanceCriteria": [
+        "There is visible spacing between the rightmost column content and the terminal edge",
+        "Padding is consistent across different terminal sizes",
+        "Cards and column borders have appropriate margin from the right edge"
+      ],
+      "priority": 15,
+      "status": "incomplete"
+    },
+    {
+      "id": "BUG-003",
+      "title": "Application crashes when scanning large directories",
+      "description": "As a user, I want to be able to open PRDMonitor with a large folder like ~/Developer without the application crashing so that I can monitor all my projects.",
+      "acceptanceCriteria": [
+        "Application handles large directory trees without crashing",
+        "Scanning ~/Developer or similar large folders works reliably",
+        "Errors during scanning are handled gracefully with informative messages",
+        "Application remains responsive while scanning many subdirectories"
+      ],
+      "priority": 16,
+      "status": "incomplete"
     }
   ]
 }
