@@ -198,3 +198,24 @@
   - Use `strings.ContainsAny()` to check for any of multiple characters (e.g., border chars)
   - lipgloss.Color type is just a string alias, works with string color codes
 ---
+
+## 2026-01-18 - PM-006
+- **What was implemented:** Status-based card sorting with priority ordering within columns
+- **Files changed:**
+  - `internal/tui/column.go` - Added SortByPriority() method using sort.Slice
+  - `internal/tui/board.go` - Added sorting calls after distributing cards to columns
+  - `internal/tui/tui_test.go` - Added 6 new tests for sorting functionality
+- **Tests added:**
+  - TestColumn_SortByPriority - Tests cards are sorted by priority (lower values first)
+  - TestColumn_SortByPriority_EmptyColumn - Tests empty column handling
+  - TestColumn_SortByPriority_SingleCard - Tests single card edge case
+  - TestColumn_SortByPriority_SamePriority - Tests cards with equal priority
+  - TestNewBoard_SortsCardsByPriority - Tests board sorts cards during construction
+  - TestNewBoard_SortsAcrossMultipleProjects - Tests sorting works across projects
+- **Learnings:**
+  - Status-based distribution was already implemented in PM-004, PM-006 focused on sorting within columns
+  - Go's `sort.Slice` is the idiomatic way to sort slices with custom comparators
+  - `sort.Slice` is not stable (equal elements may be reordered), use `sort.SliceStable` if order preservation is needed
+  - Card struct contains full `model.UserStory` so all fields (including Priority) are accessible without modifications
+  - When acceptance criteria seems already implemented, look deeper for additional functionality like sorting
+---

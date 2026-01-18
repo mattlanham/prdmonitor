@@ -80,7 +80,7 @@
         "Unknown status values default to the Incomplete column"
       ],
       "priority": 5,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-007",
