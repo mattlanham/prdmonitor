@@ -79,8 +79,32 @@ func NewApp(parseResults []*parser.ParseResult, w *watcher.Watcher, rootDir stri
 	// Extract unique project names
 	projectNames := extractProjectNames(parseResults)
 
-	return &App{
-		board:         NewBoard(parseResults),
+	// Create filter overlay
+	filterOverlay := NewFilterOverlay(projectNames)
+
+	// Load persisted state and apply to filter
+	state := LoadState(rootDir)
+	if savedFilter := state.GetFilterState(); savedFilter != nil {
+		// Only restore projects that still exist
+		for p := range savedFilter.SelectedProjects {
+			found := false
+			for _, name := range projectNames {
+				if name == p {
+					found = true
+					break
+				}
+			}
+			if !found {
+				delete(savedFilter.SelectedProjects, p)
+			}
+		}
+		// Apply the restored filter state
+		if len(savedFilter.SelectedProjects) > 0 {
+			filterOverlay.filterState = savedFilter
+		}
+	}
+
+	app := &App{
 		watcher:       w,
 		parseResults:  parseResults,
 		rootDir:       rootDir,
@@ -88,8 +112,13 @@ func NewApp(parseResults []*parser.ParseResult, w *watcher.Watcher, rootDir stri
 		expandedCard:  nil,
 		helpOverlay:   NewHelpOverlay(),
 		showFilter:    false,
-		filterOverlay: NewFilterOverlay(projectNames),
+		filterOverlay: filterOverlay,
 	}
+
+	// Build board with restored filter state
+	app.board = NewBoardWithFilterState(parseResults, filterOverlay.FilterState())
+
+	return app
 }
 
 // extractProjectNames extracts unique project names from parse results.
@@ -117,6 +146,14 @@ func (a *App) rebuildBoard() bool {
 	a.board.ClearSelection()
 
 	return false
+}
+
+// saveFilterState persists the current filter state to disk.
+func (a *App) saveFilterState() {
+	state := NewPersistentState()
+	state.SetFilterState(a.filterOverlay.FilterState())
+	// Ignore save errors - persistence is best-effort
+	_ = state.Save(a.rootDir)
 }
 
 // rebuildBoardWithAnimations rebuilds the board and applies animations for cards that moved.
@@ -196,6 +233,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.showFilter {
 				a.showFilter = false
 				a.rebuildBoard() // Apply filter when closing
+				a.saveFilterState()
 				return a, nil
 			}
 			if a.showHelp {
@@ -231,6 +269,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Rebuild board when closing filter to apply changes
 			if wasShowing && !a.showFilter {
 				a.rebuildBoard()
+				a.saveFilterState()
 			}
 			return a, nil
 		}
@@ -247,6 +286,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Close filter and apply
 				a.showFilter = false
 				a.rebuildBoard()
+				a.saveFilterState()
 				return a, nil
 			case tea.KeyUp:
 				a.filterOverlay.MoveUp()

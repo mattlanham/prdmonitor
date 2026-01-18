@@ -418,6 +418,21 @@
       "priority": 30,
       "status": "complete",
       "updatedAt": "2026-01-18T00:00:00Z"
+    },
+    {
+      "id": "PM-027",
+      "title": "Filter state persistence across sessions",
+      "description": "As a user, I want my filter selections to persist when I close and reopen the application so that I don't have to reconfigure my filters each time.",
+      "acceptanceCriteria": [
+        "Filter state is saved to a .prdmonitor.state file in the root directory",
+        "Saved state includes selected projects and filter mode (include/exclude)",
+        "State is loaded automatically when the application starts",
+        "Projects that no longer exist are removed from the restored filter",
+        "State is saved when the filter overlay is closed"
+      ],
+      "priority": 31,
+      "status": "complete",
+      "updatedAt": "2026-01-18T00:00:00Z"
     }
   ]
 }
