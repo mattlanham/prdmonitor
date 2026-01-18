@@ -35,13 +35,28 @@
 - Uses Model-Update-View pattern with `tea.Model` interface
 - `App` is the main model, contains `Board` which contains `Column` components
 - `tui.Run(parseResults)` is the main entry point - launches the TUI program
+- `tui.RunWithWatcher(parseResults, watcher, rootDir)` for file watching support
 - `tea.WithAltScreen()` provides clean terminal switching
 - `tea.WindowSizeMsg` is used to handle terminal resize events
+- `tea.Cmd` pattern for async operations (e.g., listening for file change events)
+- Custom message types (e.g., `FileChangedMsg`) for external events
 - Lip Gloss styles: use `lipgloss.NewStyle()` for creating styles, chain methods
 - `lipgloss.JoinHorizontal()` and `lipgloss.JoinVertical()` for layout composition
 - Card component with box-drawing borders using `lipgloss.RoundedBorder()`
 - `truncateString()` helper function for text that may exceed display width
 - Column colors: Red (203) for Incomplete, Yellow (220) for In Progress, Green (84) for Complete
+
+### Watcher Package (fsnotify)
+- `watcher.New()` creates a new file watcher
+- `watcher.AddFile(path)` / `watcher.AddFiles(paths)` to watch files
+- Watches parent directories since fsnotify works better with directories
+- Filters events to only watched files (ignores other files in same directory)
+- `watcher.Events()` returns channel for receiving `Event` structs
+- `watcher.Start()` should be called in a goroutine
+- `watcher.Stop()` closes the watcher and releases resources
+- Debouncing: 100ms between events for the same file to handle rapid saves
+- Operation types: `OpModify`, `OpCreate`, `OpDelete`
+- Use `defer w.Stop()` in main.go for proper cleanup
 
 ### Card Component Pattern
 - Separate `card.go` file for the Card component per AGENTS.md project structure
@@ -218,4 +233,37 @@
   - `sort.Slice` is not stable (equal elements may be reordered), use `sort.SliceStable` if order preservation is needed
   - Card struct contains full `model.UserStory` so all fields (including Priority) are accessible without modifications
   - When acceptance criteria seems already implemented, look deeper for additional functionality like sorting
+---
+
+## 2026-01-18 - PM-007
+- **What was implemented:** File change detection and live updates using fsnotify
+- **Files changed:**
+  - `internal/watcher/watcher.go` - New package with file watching using fsnotify
+  - `internal/watcher/watcher_test.go` - 12 test cases for watcher functionality
+  - `internal/tui/app.go` - Added FileChangedMsg, listenForFileChanges(), handleFileChange()
+  - `internal/tui/tui_test.go` - Updated NewApp tests for new signature
+  - `main.go` - Integrated watcher with TUI, graceful degradation if watcher fails
+  - `go.mod`, `go.sum` - Added fsnotify dependency
+- **Tests added:**
+  - TestNew - Tests watcher creation
+  - TestAddFile - Tests adding a file to watch
+  - TestAddFile_Duplicate - Tests idempotent file adding
+  - TestAddFiles - Tests batch file adding
+  - TestRemoveFile - Tests removing a file from watching
+  - TestWatchedFiles - Tests listing watched files
+  - TestOperation_String - Tests operation string representation
+  - TestWatcher_DetectsFileModification - Integration test for file modification detection
+  - TestWatcher_IgnoresUnwatchedFiles - Tests filtering to only watched files
+  - TestWatcher_Stop - Tests clean shutdown
+  - TestWatcher_Events - Tests event channel access
+  - TestWatcher_Errors - Tests error channel access
+- **Learnings:**
+  - fsnotify works better watching directories than individual files
+  - Watch the parent directory and filter events to specific files we care about
+  - Debouncing is important - editors often save files in multiple write operations
+  - Use `select` with channels to handle multiple event sources (events, errors, done)
+  - Bubble Tea async pattern: Init() returns a tea.Cmd that blocks on channel, returns msg when event occurs
+  - After handling a FileChangedMsg, must return another listenForFileChanges() cmd to continue listening
+  - When updating function signatures, check all call sites including test files
+  - Graceful degradation: if watcher fails to start, continue without file watching
 ---
