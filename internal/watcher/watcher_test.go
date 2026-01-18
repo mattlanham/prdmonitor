@@ -876,3 +876,211 @@ func TestWatcher_NoResourceLeaksAfterStop(t *testing.T) {
 		}
 	}
 }
+
+// BUG-003: Large directory handling tests
+
+func TestWatchDirectory_SkipsNodeModules(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	tmpDir := t.TempDir()
+
+	// Create a regular project directory
+	projectDir := filepath.Join(tmpDir, "myproject")
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatalf("Failed to create project directory: %v", err)
+	}
+
+	// Create node_modules with many subdirectories that should be skipped
+	nodeModules := filepath.Join(tmpDir, "myproject", "node_modules")
+	for i := 0; i < 10; i++ {
+		subDir := filepath.Join(nodeModules, "package", "subdir", "deep")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create node_modules subdirectory: %v", err)
+		}
+	}
+
+	// Watch the directory tree
+	if err := w.WatchDirectory(tmpDir); err != nil {
+		t.Fatalf("WatchDirectory() returned error: %v", err)
+	}
+
+	// Verify that we're not watching node_modules directories
+	w.mu.RLock()
+	dirCount := len(w.directories)
+	w.mu.RUnlock()
+
+	// Should watch tmpDir and myproject only (not node_modules or its children)
+	if dirCount > 3 {
+		t.Errorf("Expected at most 3 directories to be watched (node_modules should be skipped), got %d", dirCount)
+	}
+}
+
+func TestWatchDirectory_SkipsGitDirectory(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	tmpDir := t.TempDir()
+
+	// Create a regular project directory
+	projectDir := filepath.Join(tmpDir, "myproject")
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatalf("Failed to create project directory: %v", err)
+	}
+
+	// Create .git directory with nested structure
+	gitDir := filepath.Join(tmpDir, "myproject", ".git", "objects", "pack")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git directory: %v", err)
+	}
+
+	// Watch the directory tree
+	if err := w.WatchDirectory(tmpDir); err != nil {
+		t.Fatalf("WatchDirectory() returned error: %v", err)
+	}
+
+	// Verify that we're not watching .git directories
+	w.mu.RLock()
+	dirCount := len(w.directories)
+	w.mu.RUnlock()
+
+	// Should watch tmpDir and myproject only (not .git or its children)
+	if dirCount > 3 {
+		t.Errorf("Expected at most 3 directories to be watched (.git should be skipped), got %d", dirCount)
+	}
+}
+
+func TestWatchCount(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	tmpDir := t.TempDir()
+
+	// Create multiple subdirectories
+	for i := 0; i < 5; i++ {
+		subDir := filepath.Join(tmpDir, "subdir")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdirectory %d: %v", i, err)
+		}
+	}
+
+	// Watch the directory tree
+	if err := w.WatchDirectory(tmpDir); err != nil {
+		t.Fatalf("WatchDirectory() returned error: %v", err)
+	}
+
+	// WatchCount should return positive number
+	count := w.WatchCount()
+	if count <= 0 {
+		t.Errorf("Expected positive watch count, got %d", count)
+	}
+}
+
+func TestWatchLimitHit_InitiallyFalse(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	if w.WatchLimitHit() {
+		t.Error("WatchLimitHit() should be false initially")
+	}
+}
+
+func TestMaxWatches_Constant(t *testing.T) {
+	// Verify MaxWatches constant is set to a reasonable value
+	if MaxWatches <= 0 {
+		t.Errorf("MaxWatches should be positive, got %d", MaxWatches)
+	}
+	if MaxWatches < 100 {
+		t.Errorf("MaxWatches should be at least 100 for practical use, got %d", MaxWatches)
+	}
+}
+
+func TestErrTooManyWatches(t *testing.T) {
+	// Verify the error message is informative
+	errStr := ErrTooManyWatches.Error()
+	if errStr == "" {
+		t.Error("ErrTooManyWatches.Error() should return non-empty string")
+	}
+}
+
+func TestWatchDirectory_SkipsMultipleLargeDirs(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	tmpDir := t.TempDir()
+
+	// Create a regular project directory
+	projectDir := filepath.Join(tmpDir, "myproject")
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatalf("Failed to create project directory: %v", err)
+	}
+
+	// Create multiple directories that should all be skipped
+	skipDirs := []string{"node_modules", ".git", "vendor", ".venv", "dist", "build"}
+	for _, skipDir := range skipDirs {
+		deepPath := filepath.Join(tmpDir, "myproject", skipDir, "deep", "nested", "structure")
+		if err := os.MkdirAll(deepPath, 0755); err != nil {
+			t.Fatalf("Failed to create %s directory: %v", skipDir, err)
+		}
+	}
+
+	// Watch the directory tree
+	if err := w.WatchDirectory(tmpDir); err != nil {
+		t.Fatalf("WatchDirectory() returned error: %v", err)
+	}
+
+	// Verify watch count is small (all skip directories should be excluded)
+	count := w.WatchCount()
+
+	// Should only watch root + myproject = 2 directories
+	if count > 3 {
+		t.Errorf("Expected at most 3 directories (skip dirs should be excluded), got %d", count)
+	}
+}
+
+func TestWatchDirectory_HandlesLargeDirectoryGracefully(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	tmpDir := t.TempDir()
+
+	// Create many subdirectories (more than typical but less than limit for test)
+	numDirs := 50
+	for i := 0; i < numDirs; i++ {
+		subDir := filepath.Join(tmpDir, "project", "subdir")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdirectory %d: %v", i, err)
+		}
+	}
+
+	// Watch should not crash or error
+	err = w.WatchDirectory(tmpDir)
+
+	// Should succeed (50 dirs is well under 1000 limit)
+	if err != nil {
+		t.Errorf("WatchDirectory() returned unexpected error: %v", err)
+	}
+
+	// Verify we tracked directories without crashing
+	if w.WatchCount() == 0 {
+		t.Error("Expected some directories to be watched")
+	}
+}

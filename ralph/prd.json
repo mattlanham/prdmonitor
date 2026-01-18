@@ -222,7 +222,7 @@
         "Application remains responsive while scanning many subdirectories"
       ],
       "priority": 16,
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "id": "PM-015",

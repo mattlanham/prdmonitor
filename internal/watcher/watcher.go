@@ -2,15 +2,26 @@
 package watcher
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"lanham/prdmonitor/internal/scanner"
 )
 
 const prdFileName = "prd.json"
+
+// MaxWatches is the maximum number of directories to watch.
+// This prevents resource exhaustion when scanning large directory trees.
+// On macOS the default limit is ~256, on Linux it's configurable but we use
+// a reasonable default that should work on most systems.
+const MaxWatches = 1000
+
+// ErrTooManyWatches is returned when the maximum number of watches is exceeded.
+var ErrTooManyWatches = fmt.Errorf("too many directories to watch (limit: %d)", MaxWatches)
 
 // resolvePath returns the absolute path with symlinks resolved.
 // This ensures consistent path comparison on systems like macOS where
@@ -72,16 +83,18 @@ func (op Operation) String() string {
 
 // Watcher monitors prd.json files for changes.
 type Watcher struct {
-	fsWatcher    *fsnotify.Watcher
-	events       chan Event
-	errors       chan error
-	done         chan struct{}
-	files        map[string]bool // Set of watched files
-	directories  map[string]bool // Set of watched directories (for new file detection)
-	mu           sync.RWMutex
-	debounce     time.Duration // Debounce duration for rapid events
-	watchNewDirs bool          // Whether to detect new prd.json files in directories
-	stopped      bool          // Whether the watcher has been stopped
+	fsWatcher     *fsnotify.Watcher
+	events        chan Event
+	errors        chan error
+	done          chan struct{}
+	files         map[string]bool // Set of watched files
+	directories   map[string]bool // Set of watched directories (for new file detection)
+	mu            sync.RWMutex
+	debounce      time.Duration // Debounce duration for rapid events
+	watchNewDirs  bool          // Whether to detect new prd.json files in directories
+	stopped       bool          // Whether the watcher has been stopped
+	watchCount    int           // Number of directories being watched
+	watchLimitHit bool          // Whether the watch limit was reached
 }
 
 // New creates a new Watcher.
@@ -105,6 +118,8 @@ func New() (*Watcher, error) {
 
 // WatchDirectory recursively watches a directory tree for new prd.json files.
 // This enables detection of new prd.json files in existing and new subdirectories.
+// It skips common large directories (node_modules, .git, etc.) and limits the
+// total number of watches to prevent resource exhaustion.
 func (w *Watcher) WatchDirectory(rootDir string) error {
 	absRoot, err := resolvePath(rootDir)
 	if err != nil {
@@ -119,7 +134,28 @@ func (w *Watcher) WatchDirectory(rootDir string) error {
 		}
 
 		if d.IsDir() {
-			return w.addDirectory(path)
+			// Skip common large directories that won't contain prd.json files
+			if scanner.ShouldSkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+
+			// Check if we've hit the watch limit
+			w.mu.RLock()
+			hitLimit := w.watchLimitHit
+			w.mu.RUnlock()
+			if hitLimit {
+				return filepath.SkipDir
+			}
+
+			addErr := w.addDirectory(path)
+			if addErr != nil {
+				// If we can't add more watches, mark limit hit but continue
+				// so we can still watch what we have
+				w.mu.Lock()
+				w.watchLimitHit = true
+				w.mu.Unlock()
+				return filepath.SkipDir
+			}
 		}
 		return nil
 	})
@@ -130,12 +166,18 @@ func (w *Watcher) WatchDirectory(rootDir string) error {
 
 	w.mu.Lock()
 	w.watchNewDirs = true
+	limitHit := w.watchLimitHit
 	w.mu.Unlock()
+
+	if limitHit {
+		return ErrTooManyWatches
+	}
 
 	return nil
 }
 
 // addDirectory adds a directory to be watched for new prd.json files.
+// Returns an error if the watch limit is exceeded or fsnotify fails.
 func (w *Watcher) addDirectory(dirPath string) error {
 	absPath, err := resolvePath(dirPath)
 	if err != nil {
@@ -150,11 +192,20 @@ func (w *Watcher) addDirectory(dirPath string) error {
 		return nil
 	}
 
+	// Check if we've hit the watch limit
+	if w.watchCount >= MaxWatches {
+		w.watchLimitHit = true
+		return ErrTooManyWatches
+	}
+
 	if err := w.fsWatcher.Add(absPath); err != nil {
+		// Mark limit hit if it looks like a resource limit error
+		w.watchLimitHit = true
 		return err
 	}
 
 	w.directories[absPath] = true
+	w.watchCount++
 	return nil
 }
 
@@ -360,6 +411,7 @@ func (w *Watcher) handleNewFileOrDirectory(event fsnotify.Event, absPath string)
 }
 
 // watchNewDirectory watches a newly created directory and all its subdirectories.
+// Respects the directory skip list and watch limits.
 func (w *Watcher) watchNewDirectory(dirPath string) {
 	// Walk the new directory tree to watch it and find any prd.json files
 	filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
@@ -373,11 +425,28 @@ func (w *Watcher) watchNewDirectory(dirPath string) {
 		}
 
 		if d.IsDir() {
-			// Watch the directory
+			// Skip common large directories
+			if scanner.ShouldSkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+
+			// Check if we've hit the watch limit
 			w.mu.Lock()
+			if w.watchLimitHit || w.watchCount >= MaxWatches {
+				w.watchLimitHit = true
+				w.mu.Unlock()
+				return filepath.SkipDir
+			}
+
+			// Watch the directory if not already watching
 			if !w.directories[absPath] {
-				w.fsWatcher.Add(absPath)
+				if err := w.fsWatcher.Add(absPath); err != nil {
+					w.watchLimitHit = true
+					w.mu.Unlock()
+					return filepath.SkipDir
+				}
 				w.directories[absPath] = true
+				w.watchCount++
 			}
 			w.mu.Unlock()
 		} else if d.Name() == prdFileName {
@@ -444,4 +513,18 @@ func (w *Watcher) WatchedFiles() []string {
 		files = append(files, f)
 	}
 	return files
+}
+
+// WatchCount returns the number of directories currently being watched.
+func (w *Watcher) WatchCount() int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.watchCount
+}
+
+// WatchLimitHit returns true if the watch limit was reached during setup.
+func (w *Watcher) WatchLimitHit() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.watchLimitHit
 }

@@ -8,6 +8,43 @@ import (
 
 const prdFileName = "prd.json"
 
+// SkipDirs contains directory names that should be skipped during scanning.
+// These are commonly large directories that won't contain prd.json files.
+var SkipDirs = map[string]bool{
+	"node_modules":  true,
+	".git":          true,
+	".hg":           true,
+	".svn":          true,
+	"vendor":        true,
+	".idea":         true,
+	".vscode":       true,
+	"__pycache__":   true,
+	".cache":        true,
+	".npm":          true,
+	".yarn":         true,
+	"dist":          true,
+	"build":         true,
+	".next":         true,
+	".nuxt":         true,
+	"coverage":      true,
+	".tox":          true,
+	".pytest_cache": true,
+	"venv":          true,
+	".venv":         true,
+	"env":           true,
+	".env":          true,
+	"Pods":          true,
+	"DerivedData":   true,
+	".gradle":       true,
+	"target":        true,
+	"bin":           true,
+	"obj":           true,
+	".terraform":    true,
+	".cargo":        true,
+	"pkg":           true,
+	"Carthage":      true,
+}
+
 // ScanResult contains the results of scanning a directory for prd.json files.
 type ScanResult struct {
 	// Files is a list of absolute paths to discovered prd.json files.
@@ -42,8 +79,11 @@ func Scan(root string) (*ScanResult, error) {
 			return nil
 		}
 
-		// Skip directories, we only care about files
+		// Skip common large directories that won't contain prd.json files
 		if d.IsDir() {
+			if ShouldSkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -84,4 +124,10 @@ type NotADirectoryError struct {
 
 func (e *NotADirectoryError) Error() string {
 	return "path is not a directory: " + e.Path
+}
+
+// ShouldSkipDir returns true if the directory name should be skipped during scanning.
+// This helps avoid scanning large directories that won't contain prd.json files.
+func ShouldSkipDir(name string) bool {
+	return SkipDirs[name]
 }

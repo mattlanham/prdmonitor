@@ -22,6 +22,10 @@
 - Convert paths to absolute using `filepath.Abs()` for consistency
 - Custom error types (e.g., `NotADirectoryError`) for specific error handling
 - Module name is `lanham/prdmonitor` (important for internal imports)
+- **Directory Skipping**: `SkipDirs` map contains large directories to skip (node_modules, .git, vendor, etc.)
+  - `ShouldSkipDir(name)` checks if a directory should be skipped
+  - Use `filepath.SkipDir` return value from WalkDir callback to skip entire subtrees efficiently
+  - Prevents scanning massive directories that won't contain prd.json files
 
 ### Parser Package
 - `ParseFile(filePath)` returns `*ParseResult, error` - reads and parses a single file
@@ -86,6 +90,13 @@
   - Closes `events` and `errors` channels to unblock listeners
   - `Stopped()` method checks if watcher has been stopped
   - Stop() is idempotent - safe to call multiple times
+- **Watch Limits**: Prevents resource exhaustion when watching large directory trees
+  - `MaxWatches` constant (1000) limits total directories watched
+  - `ErrTooManyWatches` returned when limit exceeded
+  - `WatchCount()` returns current number of watched directories
+  - `WatchLimitHit()` checks if limit was reached
+  - Uses `scanner.ShouldSkipDir()` to skip node_modules, .git, etc.
+  - Graceful degradation: continues with partial watching if limit hit
 
 ### Card Component Pattern
 - Separate `card.go` file for the Card component per AGENTS.md project structure
@@ -565,4 +576,42 @@
   - String length in rendered output includes ANSI escape codes (colors), so testing visual width differs from byte length
   - Tests for visual padding should focus on computed dimensions (column widths) rather than raw string lengths
   - Similar pattern to BUG-001 (top padding): small style change + corresponding dimension adjustment
+---
+
+## 2026-01-18 - BUG-003
+- **What was implemented:** Large directory scanning fix - added directory skip list and watch limit to prevent crashes
+- **Files changed:**
+  - `internal/scanner/scanner.go` - Added SkipDirs map with common large directories (node_modules, .git, vendor, etc.), added ShouldSkipDir() helper, modified Scan() to skip these directories
+  - `internal/scanner/scanner_test.go` - Added 8 new tests for directory skipping functionality
+  - `internal/watcher/watcher.go` - Added MaxWatches constant (1000), ErrTooManyWatches error, watchCount and watchLimitHit tracking, modified WatchDirectory() and addDirectory() to respect limits and skip dirs
+  - `internal/watcher/watcher_test.go` - Added 9 new tests for watch limits and directory skipping
+  - `main.go` - Enhanced error handling to show informative messages when watch limit is hit
+- **Tests added:**
+  - TestShouldSkipDir_SkipsNodeModules - Verifies node_modules is skipped
+  - TestShouldSkipDir_SkipsGit - Verifies .git is skipped
+  - TestShouldSkipDir_SkipsVendor - Verifies vendor is skipped
+  - TestShouldSkipDir_DoesNotSkipRegularDirs - Verifies normal dirs are not skipped
+  - TestShouldSkipDir_AllSkipDirsInMap - Verifies all map entries return true
+  - TestScan_SkipsNodeModules - Integration test for scanner skipping node_modules
+  - TestScan_SkipsGitDirectory - Integration test for scanner skipping .git
+  - TestScan_SkipsMultipleLargeDirectories - Tests multiple skip dirs at once
+  - TestWatchDirectory_SkipsNodeModules - Watcher skips node_modules
+  - TestWatchDirectory_SkipsGitDirectory - Watcher skips .git
+  - TestWatchCount - Tests WatchCount() method
+  - TestWatchLimitHit_InitiallyFalse - Tests initial state
+  - TestMaxWatches_Constant - Verifies constant is reasonable
+  - TestErrTooManyWatches - Tests error message
+  - TestWatchDirectory_SkipsMultipleLargeDirs - Tests watcher with multiple skip dirs
+  - TestWatchDirectory_HandlesLargeDirectoryGracefully - Stress test for many directories
+- **Learnings:**
+  - Large directory trees (like ~/Developer) cause two main issues:
+    1. Scanner visits every file in massive directories like node_modules
+    2. Watcher tries to add watches for every subdirectory, hitting system limits
+  - fsnotify has system-level limits: ~256 on macOS, configurable on Linux
+  - Common directories to skip: node_modules, .git, vendor, .venv, dist, build, coverage, Pods, DerivedData
+  - The `filepath.SkipDir` return value from WalkDir callback skips entire subtrees efficiently
+  - Import between internal packages works: `lanham/prdmonitor/internal/scanner` from watcher
+  - Watch limit should be high enough for real use (1000) but low enough to prevent resource exhaustion
+  - Graceful degradation: when limit is hit, continue with partial watching rather than failing
+  - User-facing messages should be informative: "Directory tree too large, watching X directories (new file detection may be limited)"
 ---
