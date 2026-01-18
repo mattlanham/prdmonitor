@@ -236,7 +236,7 @@
         "Title adapts or truncates gracefully on narrow terminals"
       ],
       "priority": 17,
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "id": "PM-016",

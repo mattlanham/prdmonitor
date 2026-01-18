@@ -156,8 +156,17 @@ func (b *Board) SetSize(width, height int) {
 	b.width = width
 	b.height = height
 
-	// Reserve space for header (with top padding), margin, and footer (about 5 lines)
-	availableHeight := height - 5
+	// Reserve space for header and footer:
+	// - ASCII art header: 3 lines + 1 top padding + 1 margin = 5 lines (when width >= MinWidthForASCIIArt)
+	// - Simple header: 1 line + 1 top padding + 1 margin = 3 lines (narrow terminals)
+	// - Footer: 2 lines (status bar + help message) + 1 margin = 3 lines
+	// Total: 8 lines for ASCII art, 6 lines for simple header
+	// Use 8 to account for ASCII art (worst case)
+	reservedLines := 8
+	if width < MinWidthForASCIIArt {
+		reservedLines = 6
+	}
+	availableHeight := height - reservedLines
 	if availableHeight < 5 {
 		availableHeight = 5
 	}

@@ -2955,8 +2955,9 @@ func TestApp_View_HeaderHasBreathingRoom(t *testing.T) {
 
 	view := app.View()
 
-	// The header "PRDMonitor - Kanban Board" should not be at the very first character
-	headerText := "PRDMonitor - Kanban Board"
+	// The header should not be at the very first character (has top padding)
+	// With ASCII art, we look for the first line of the art
+	headerText := "╔═╗╦═╗╔╦╗" // Start of ASCII art first line
 	headerIndex := strings.Index(view, headerText)
 
 	if headerIndex == 0 {
@@ -2964,7 +2965,7 @@ func TestApp_View_HeaderHasBreathingRoom(t *testing.T) {
 	}
 
 	if headerIndex < 0 {
-		t.Error("header text should be present in the view")
+		t.Error("header (ASCII art) should be present in the view")
 	}
 }
 
@@ -3078,5 +3079,245 @@ func TestApp_View_RightPaddingColumnCalculation(t *testing.T) {
 		if col.width != expectedColWidth {
 			t.Errorf("column %d: width %d should be %d (accounting for right padding)", i, col.width, expectedColWidth)
 		}
+	}
+}
+
+// ASCII art title header tests for PM-015
+
+func TestASCIIArtTitle_IsSet(t *testing.T) {
+	// Verify the ASCII art title is defined
+	if len(ASCIIArtTitle) == 0 {
+		t.Error("ASCIIArtTitle should not be empty")
+	}
+
+	// Should have 3 lines for the ASCII art
+	if len(ASCIIArtTitle) != 3 {
+		t.Errorf("expected 3 lines of ASCII art, got %d", len(ASCIIArtTitle))
+	}
+}
+
+func TestASCIIArtWidth_Constant(t *testing.T) {
+	// Verify the width constant is set
+	if ASCIIArtWidth <= 0 {
+		t.Error("ASCIIArtWidth should be positive")
+	}
+
+	// Verify it matches the actual rune width of the ASCII art
+	// Note: len(string) counts bytes, but box-drawing chars are multi-byte UTF-8
+	// Use len([]rune(line)) for visual character count
+	for i, line := range ASCIIArtTitle {
+		runeLen := len([]rune(line))
+		if runeLen != ASCIIArtWidth {
+			t.Errorf("ASCII art line %d has rune width %d, expected %d", i, runeLen, ASCIIArtWidth)
+		}
+	}
+}
+
+func TestMinWidthForASCIIArt_Constant(t *testing.T) {
+	// Verify the minimum width constant is set and reasonable
+	if MinWidthForASCIIArt <= 0 {
+		t.Error("MinWidthForASCIIArt should be positive")
+	}
+
+	// Should be greater than the ASCII art width
+	if MinWidthForASCIIArt < ASCIIArtWidth {
+		t.Errorf("MinWidthForASCIIArt (%d) should be >= ASCIIArtWidth (%d)", MinWidthForASCIIArt, ASCIIArtWidth)
+	}
+}
+
+func TestApp_View_ShowsASCIIArtTitle_WideTerminal(t *testing.T) {
+	// When terminal is wide enough, ASCII art should be displayed
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100 // Wide enough for ASCII art
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	view := app.View()
+
+	// Check that at least part of the ASCII art is present
+	// The first line of the ASCII art is distinctive
+	if !strings.Contains(view, "╔═╗") {
+		t.Error("wide terminal should show ASCII art title")
+	}
+
+	// Should also contain other parts of the art
+	if !strings.Contains(view, "╠═╝") || !strings.Contains(view, "╩") {
+		t.Error("ASCII art should have all three lines visible")
+	}
+}
+
+func TestApp_View_ShowsSimpleTitle_NarrowTerminal(t *testing.T) {
+	// When terminal is narrow, simple text title should be displayed
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = MinWidthForASCIIArt - 5 // Narrower than minimum for ASCII art
+	app.height = 40
+	app.board.SetSize(app.width, 40)
+
+	view := app.View()
+
+	// Should contain simple text title
+	if !strings.Contains(view, "PRDMonitor") {
+		t.Error("narrow terminal should still show PRDMonitor title")
+	}
+
+	// Should NOT contain ASCII art characters (the distinctive double-line box characters)
+	if strings.Contains(view, "╔═╗╦═╗╔╦╗") {
+		t.Error("narrow terminal should not show ASCII art, should use simple text")
+	}
+}
+
+func TestApp_View_ASCIIArtCentered_WideTerminal(t *testing.T) {
+	// Test that ASCII art is centered on very wide terminals
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 200 // Very wide terminal
+	app.height = 40
+	app.board.SetSize(200, 40)
+
+	view := app.View()
+
+	// Check that ASCII art is present
+	if !strings.Contains(view, "╔═╗") {
+		t.Error("wide terminal should show ASCII art")
+	}
+
+	// The centering should add spaces before the ASCII art content
+	// This is handled by lipgloss Align(lipgloss.Center)
+}
+
+func TestApp_RenderHeader_ReturnsASCIIArt_WideTerminal(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100 // Wide enough
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	header := app.renderHeader()
+
+	// Header should contain ASCII art
+	if !strings.Contains(header, "╔═╗") {
+		t.Error("renderHeader should return ASCII art for wide terminal")
+	}
+}
+
+func TestApp_RenderHeader_ReturnsSimpleText_NarrowTerminal(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = MinWidthForASCIIArt - 10 // Narrow
+	app.height = 40
+	app.board.SetSize(app.width, 40)
+
+	header := app.renderHeader()
+
+	// Header should contain simple text
+	if !strings.Contains(header, "PRDMonitor") {
+		t.Error("renderHeader should return PRDMonitor text for narrow terminal")
+	}
+
+	// Should NOT contain full ASCII art
+	if strings.Contains(header, "╔═╗╦═╗╔╦╗") {
+		t.Error("renderHeader should not return ASCII art for narrow terminal")
+	}
+}
+
+func TestApp_RenderASCIIArtHeader_ContainsAllLines(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+
+	header := app.renderASCIIArtHeader()
+
+	// Should contain all lines of the ASCII art
+	for i, line := range ASCIIArtTitle {
+		if !strings.Contains(header, line) {
+			t.Errorf("ASCII art header missing line %d: %s", i, line)
+		}
+	}
+}
+
+func TestBoard_SetSize_AccountsForASCIIArtHeight_WideTerminal(t *testing.T) {
+	// When terminal is wide, ASCII art uses more vertical space
+	board := NewBoard([]*parser.ParseResult{})
+	board.SetSize(100, 40) // Wide terminal
+
+	// With ASCII art: 3 lines + 1 top padding + 1 margin = 5 lines header
+	// Footer: 2 lines + 1 margin = 3 lines
+	// Total reserved: 8 lines
+	expectedMaxHeight := 40 - 8
+
+	for _, col := range board.columns {
+		if col.height > expectedMaxHeight {
+			t.Errorf("column height %d should not exceed %d (accounting for ASCII art header)", col.height, expectedMaxHeight)
+		}
+	}
+}
+
+func TestBoard_SetSize_AccountsForSimpleHeaderHeight_NarrowTerminal(t *testing.T) {
+	// When terminal is narrow, simple header uses less vertical space
+	board := NewBoard([]*parser.ParseResult{})
+	board.SetSize(MinWidthForASCIIArt-10, 40) // Narrow terminal
+
+	// With simple header: 1 line + 1 top padding + 1 margin = 3 lines header
+	// Footer: 2 lines + 1 margin = 3 lines
+	// Total reserved: 6 lines
+	expectedMaxHeight := 40 - 6
+
+	for _, col := range board.columns {
+		if col.height > expectedMaxHeight {
+			t.Errorf("column height %d should not exceed %d (accounting for simple header)", col.height, expectedMaxHeight)
+		}
+	}
+}
+
+func TestASCIIArtTitle_ContainsPRDMonitor(t *testing.T) {
+	// The ASCII art should represent "PRDMonitor"
+	// This is a visual check - the letters P R D M o n i t o r should be discernible
+	fullArt := strings.Join(ASCIIArtTitle, "")
+
+	// The art uses box-drawing characters, so we check for the distinctive characters
+	// P uses ╔═╗ and ╠═╝
+	if !strings.Contains(fullArt, "╔═╗") || !strings.Contains(fullArt, "╠═╝") {
+		t.Error("ASCII art should contain P-like character pattern")
+	}
+
+	// The art should be consistent (no partial characters)
+	// Use rune count, not byte count, since box-drawing chars are multi-byte UTF-8
+	totalRunes := len([]rune(fullArt))
+	expectedRunes := ASCIIArtWidth * 3
+	if totalRunes != expectedRunes {
+		t.Errorf("ASCII art total rune length should be %d, got %d", expectedRunes, totalRunes)
+	}
+}
+
+func TestApp_View_TitleDoesNotInterfereWithBoard(t *testing.T) {
+	// Verify that the title header doesn't overlap or interfere with the board content
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Title: "Story 1", Status: model.StatusIncomplete},
+					{ID: "US-002", Title: "Story 2", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	view := app.View()
+
+	// Both the ASCII art and card content should be visible
+	if !strings.Contains(view, "╔═╗") {
+		t.Error("view should contain ASCII art header")
+	}
+
+	if !strings.Contains(view, "US-001") {
+		t.Error("view should contain card IDs (title doesn't interfere with board)")
+	}
+
+	if !strings.Contains(view, "Incomplete") {
+		t.Error("view should contain column titles")
 	}
 }

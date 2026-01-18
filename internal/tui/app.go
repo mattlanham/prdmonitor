@@ -2,12 +2,30 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"lanham/prdmonitor/internal/parser"
 	"lanham/prdmonitor/internal/watcher"
 )
+
+// ASCIIArtTitle is the ASCII art representation of "PRDMonitor".
+// Uses a compact but stylish font that works well in terminals.
+var ASCIIArtTitle = []string{
+	"╔═╗╦═╗╔╦╗╔╦╗╔═╗╔╗╔╦╔╦╗╔═╗╦═╗",
+	"╠═╝╠╦╝ ║║║║║║ ║║║║║ ║ ║ ║╠╦╝",
+	"╩  ╩╚══╩╝╩ ╩╚═╝╝╚╝╩ ╩ ╚═╝╩╚═",
+}
+
+// ASCIIArtWidth is the visual width of the ASCII art title in rune characters.
+// Note: Byte length varies due to Unicode box-drawing characters.
+const ASCIIArtWidth = 28
+
+// MinWidthForASCIIArt is the minimum terminal width to display the ASCII art.
+// Below this width, a simple text header is shown instead.
+const MinWidthForASCIIArt = 40
 
 // ReadOnlyMessage is displayed in the status bar to indicate view-only mode.
 const ReadOnlyMessage = "VIEW-ONLY"
@@ -271,14 +289,8 @@ func (a *App) View() string {
 		return "Loading..."
 	}
 
-	// Header with top padding for breathing room
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("39")).
-		PaddingTop(1).
-		MarginBottom(1)
-
-	header := headerStyle.Render("PRDMonitor - Kanban Board")
+	// Header with ASCII art title or fallback text for narrow terminals
+	header := a.renderHeader()
 
 	// Board view
 	boardView := a.board.View()
@@ -325,6 +337,42 @@ func (a *App) View() string {
 	}
 
 	return baseView
+}
+
+// renderHeader renders the header with ASCII art title or fallback text.
+func (a *App) renderHeader() string {
+	// Use ASCII art if terminal is wide enough
+	if a.width >= MinWidthForASCIIArt {
+		return a.renderASCIIArtHeader()
+	}
+
+	// Fallback to simple text header for narrow terminals
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("39")).
+		PaddingTop(1).
+		MarginBottom(1)
+
+	return headerStyle.Render("PRDMonitor")
+}
+
+// renderASCIIArtHeader renders the ASCII art title header.
+func (a *App) renderASCIIArtHeader() string {
+	titleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("39")).
+		Bold(true).
+		PaddingTop(1).
+		MarginBottom(1)
+
+	// Join the ASCII art lines
+	artLines := strings.Join(ASCIIArtTitle, "\n")
+
+	// Center the ASCII art if the terminal is wider than the art
+	if a.width > ASCIIArtWidth {
+		titleStyle = titleStyle.Width(a.width - 4).Align(lipgloss.Center)
+	}
+
+	return titleStyle.Render(artLines)
 }
 
 // renderWithOverlay renders an overlay centered on top of the base view.
