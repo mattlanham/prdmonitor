@@ -79,8 +79,8 @@ prdmonitor
 # Monitor a specific directory
 prdmonitor /path/to/projects
 
-# Try it with the included examples
-prdmonitor Example
+# Try it with the included example directory
+prdmonitor example
 ```
 
 ### Keyboard Shortcuts
@@ -165,7 +165,7 @@ prdmonitor/
 │       └── help.go      # Help overlay
 ├── go.mod
 ├── go.sum
-└── Example/             # Sample projects to try out
+└── example/             # Sample projects to try out
     ├── weather-app/
     │   └── prd.json
     ├── task-tracker/
