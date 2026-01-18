@@ -4,6 +4,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"lanham/prdmonitor/internal/scanner"
 )
 
 // Config holds the application configuration parsed from CLI arguments.
@@ -67,6 +69,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// For now, just print the root directory to confirm parsing works
+	// Scan for prd.json files
+	result, err := scanner.Scan(config.RootDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error scanning directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Log any non-fatal scanning errors
+	if result.HasErrors() {
+		for _, scanErr := range result.Errors {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", scanErr)
+		}
+	}
+
+	// Display the number of discovered projects
 	fmt.Printf("PRDMonitor starting with root directory: %s\n", config.RootDir)
+	fmt.Printf("Discovered %d project(s)\n", result.Count())
 }

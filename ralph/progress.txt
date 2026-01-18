@@ -16,6 +16,13 @@
 - Check `os.IsNotExist(err)` for cleaner error messages
 - Validate directory is readable by attempting to open it
 
+### Scanner Package
+- Use `filepath.WalkDir` for recursive directory traversal (more efficient than `filepath.Walk`)
+- Return `*ScanResult` with both files and non-fatal errors
+- Convert paths to absolute using `filepath.Abs()` for consistency
+- Custom error types (e.g., `NotADirectoryError`) for specific error handling
+- Module name is `lanham/prdmonitor` (important for internal imports)
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -37,4 +44,29 @@
   - Pass `[]string` for args to make functions testable without mocking os.Args
   - Check directory readability by attempting `os.Open()` on it
   - Go 1.24 is the current version (updated from AGENTS.md which says 1.21+)
+---
+
+## 2026-01-18 - PM-002
+- **What was implemented:** Recursive directory scanning for prd.json files
+- **Files changed:**
+  - `internal/scanner/scanner.go` - New package with Scan function and ScanResult type
+  - `internal/scanner/scanner_test.go` - Comprehensive test suite (10 test cases)
+  - `main.go` - Integrated scanner, displays project count on startup
+- **Tests added:**
+  - TestScan_FindsPrdJsonFiles - Tests recursive discovery in nested directories
+  - TestScan_IgnoresOtherFiles - Verifies only exact "prd.json" matches
+  - TestScan_EmptyDirectory - Tests empty directory handling
+  - TestScan_NonExistentDirectory - Tests error for invalid paths
+  - TestScan_FileInsteadOfDirectory - Tests NotADirectoryError
+  - TestScan_ReturnsAbsolutePaths - Verifies paths are absolute
+  - TestScan_HandlesUnreadableDirectories - Tests graceful error handling
+  - TestScanResult_Count - Tests Count() method
+  - TestScanResult_HasErrors - Tests HasErrors() method
+  - TestNotADirectoryError - Tests error message format
+- **Learnings:**
+  - `filepath.WalkDir` is preferred over `filepath.Walk` (more efficient, added in Go 1.16)
+  - Use `d.Name()` instead of `filepath.Base(path)` when inside WalkDir callback
+  - Return struct with both results and errors for non-fatal error handling
+  - Custom error types allow callers to check for specific error conditions
+  - Module name `lanham/prdmonitor` must be used in all internal imports
 ---
