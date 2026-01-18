@@ -81,6 +81,7 @@ type Watcher struct {
 	mu           sync.RWMutex
 	debounce     time.Duration // Debounce duration for rapid events
 	watchNewDirs bool          // Whether to detect new prd.json files in directories
+	stopped      bool          // Whether the watcher has been stopped
 }
 
 // New creates a new Watcher.
@@ -400,9 +401,37 @@ func (w *Watcher) watchNewDirectory(dirPath string) {
 }
 
 // Stop stops the watcher and releases resources.
+// It closes the done channel to signal the Start goroutine to exit,
+// then closes the events and errors channels to unblock any listeners,
+// and finally closes the underlying fsnotify watcher.
 func (w *Watcher) Stop() error {
+	w.mu.Lock()
+	if w.stopped {
+		w.mu.Unlock()
+		return nil
+	}
+	w.stopped = true
+	w.mu.Unlock()
+
+	// Signal the Start goroutine to exit
 	close(w.done)
-	return w.fsWatcher.Close()
+
+	// Close the fsnotify watcher first to stop receiving events
+	err := w.fsWatcher.Close()
+
+	// Close our channels to unblock any listeners
+	// This must be done after closing fsWatcher to prevent sending on closed channels
+	close(w.events)
+	close(w.errors)
+
+	return err
+}
+
+// Stopped returns true if the watcher has been stopped.
+func (w *Watcher) Stopped() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.stopped
 }
 
 // WatchedFiles returns a slice of all currently watched file paths.

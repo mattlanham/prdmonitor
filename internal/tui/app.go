@@ -55,16 +55,28 @@ func (a *App) Init() tea.Cmd {
 	return nil
 }
 
+// WatcherStoppedMsg is sent when the file watcher has been stopped.
+type WatcherStoppedMsg struct{}
+
 // listenForFileChanges returns a command that listens for file change events.
+// It handles closed channels gracefully when the watcher is stopped.
 func (a *App) listenForFileChanges() tea.Cmd {
 	return func() tea.Msg {
 		select {
-		case event := <-a.watcher.Events():
+		case event, ok := <-a.watcher.Events():
+			if !ok {
+				// Channel closed, watcher has been stopped
+				return WatcherStoppedMsg{}
+			}
 			return FileChangedMsg{
 				FilePath: event.FilePath,
 				Op:       event.Op,
 			}
-		case <-a.watcher.Errors():
+		case _, ok := <-a.watcher.Errors():
+			if !ok {
+				// Channel closed, watcher has been stopped
+				return WatcherStoppedMsg{}
+			}
 			// Ignore watcher errors for now, just continue listening
 			return nil
 		}
@@ -178,6 +190,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.handleFileChange(msg)
 		// Continue listening for more file changes
 		return a, a.listenForFileChanges()
+
+	case WatcherStoppedMsg:
+		// Watcher has been stopped, no need to listen for more changes
+		// This happens during graceful shutdown
+		return a, nil
 	}
 
 	return a, nil

@@ -712,3 +712,167 @@ func TestWatcher_DetectsFileRenameAsDelete(t *testing.T) {
 		t.Error("Timed out waiting for rename/delete event")
 	}
 }
+
+// Graceful exit and cleanup tests for PM-014
+
+func TestWatcher_StopClosesChannels(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+
+	// Start watcher
+	go w.Start()
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop the watcher
+	if err := w.Stop(); err != nil {
+		t.Errorf("Stop() returned error: %v", err)
+	}
+
+	// Give time for cleanup
+	time.Sleep(50 * time.Millisecond)
+
+	// Reading from events channel should return immediately with ok=false
+	select {
+	case _, ok := <-w.Events():
+		if ok {
+			t.Error("Events channel should be closed after Stop()")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Events channel should be closed and not block")
+	}
+
+	// Reading from errors channel should return immediately with ok=false
+	select {
+	case _, ok := <-w.Errors():
+		if ok {
+			t.Error("Errors channel should be closed after Stop()")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Errors channel should be closed and not block")
+	}
+}
+
+func TestWatcher_Stopped(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+
+	// Initially not stopped
+	if w.Stopped() {
+		t.Error("Watcher should not be stopped immediately after creation")
+	}
+
+	// Start watcher
+	go w.Start()
+	time.Sleep(50 * time.Millisecond)
+
+	// Still not stopped
+	if w.Stopped() {
+		t.Error("Watcher should not be stopped while running")
+	}
+
+	// Stop the watcher
+	if err := w.Stop(); err != nil {
+		t.Errorf("Stop() returned error: %v", err)
+	}
+
+	// Now it should be stopped
+	if !w.Stopped() {
+		t.Error("Watcher should be stopped after Stop()")
+	}
+}
+
+func TestWatcher_StopIsIdempotent(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+
+	// Start watcher
+	go w.Start()
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop multiple times - should not panic or error
+	if err := w.Stop(); err != nil {
+		t.Errorf("First Stop() returned error: %v", err)
+	}
+
+	// Second stop should also succeed (idempotent)
+	if err := w.Stop(); err != nil {
+		t.Errorf("Second Stop() returned error: %v", err)
+	}
+
+	// Third stop should also succeed
+	if err := w.Stop(); err != nil {
+		t.Errorf("Third Stop() returned error: %v", err)
+	}
+}
+
+func TestWatcher_StartExitsOnStop(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+
+	// Channel to signal Start has exited
+	startExited := make(chan struct{})
+
+	// Start watcher in goroutine
+	go func() {
+		w.Start()
+		close(startExited)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop the watcher
+	if err := w.Stop(); err != nil {
+		t.Errorf("Stop() returned error: %v", err)
+	}
+
+	// Start() should exit within a reasonable time
+	select {
+	case <-startExited:
+		// Good - Start exited
+	case <-time.After(1 * time.Second):
+		t.Error("Start() did not exit after Stop() was called - potential goroutine leak")
+	}
+}
+
+func TestWatcher_NoResourceLeaksAfterStop(t *testing.T) {
+	// Create and stop multiple watchers to ensure no resource leaks
+	for i := 0; i < 5; i++ {
+		w, err := New()
+		if err != nil {
+			t.Fatalf("New() returned error on iteration %d: %v", i, err)
+		}
+
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "prd.json")
+		if err := os.WriteFile(tmpFile, []byte("{}"), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		if err := w.AddFile(tmpFile); err != nil {
+			t.Fatalf("AddFile() returned error: %v", err)
+		}
+
+		go w.Start()
+		time.Sleep(20 * time.Millisecond)
+
+		if err := w.Stop(); err != nil {
+			t.Errorf("Stop() returned error on iteration %d: %v", i, err)
+		}
+
+		// Wait for cleanup
+		time.Sleep(20 * time.Millisecond)
+
+		// Verify stopped state
+		if !w.Stopped() {
+			t.Errorf("Watcher not stopped after Stop() on iteration %d", i)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -2702,5 +2703,144 @@ func TestApp_MouseWheelScroll_BlockedByOverlay(t *testing.T) {
 	// Should not have scrolled
 	if app.board.columns[0].ScrollOffset() != initialOffset {
 		t.Error("mouse scroll should be blocked when help overlay is shown")
+	}
+}
+
+// Graceful exit and cleanup tests for PM-014
+
+func TestApp_Update_QuitViaQKey(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	_, cmd := app.Update(msg)
+
+	// Should return Quit command
+	if cmd == nil {
+		t.Error("pressing 'q' should return a Quit command")
+	}
+
+	// Verify it's a quit command by checking the command type
+	// tea.Quit returns a special quit message
+	quitMsg := cmd()
+	if quitMsg != tea.Quit() {
+		t.Error("command should be tea.Quit")
+	}
+}
+
+func TestApp_Update_QuitViaCtrlC(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
+	_, cmd := app.Update(msg)
+
+	// Should return Quit command
+	if cmd == nil {
+		t.Error("pressing Ctrl+C should return a Quit command")
+	}
+}
+
+func TestApp_Update_WatcherStoppedMsg(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Simulate receiving a WatcherStoppedMsg
+	msg := WatcherStoppedMsg{}
+	_, cmd := app.Update(msg)
+
+	// Should return nil command (no more listening for file changes)
+	if cmd != nil {
+		t.Error("WatcherStoppedMsg should return nil command")
+	}
+}
+
+func TestApp_ListenForFileChanges_HandlesClosedChannel(t *testing.T) {
+	// Create a watcher, start it, then stop it
+	w, err := watcher.New()
+	if err != nil {
+		t.Fatalf("watcher.New() returned error: %v", err)
+	}
+
+	app := NewApp([]*parser.ParseResult{}, w, "")
+
+	// Start the watcher
+	go w.Start()
+
+	// Stop the watcher to close channels
+	w.Stop()
+
+	// Get the listen command
+	cmd := app.listenForFileChanges()
+
+	// Execute the command - it should return WatcherStoppedMsg, not block forever
+	done := make(chan tea.Msg)
+	go func() {
+		done <- cmd()
+	}()
+
+	select {
+	case msg := <-done:
+		// Should be WatcherStoppedMsg
+		if _, ok := msg.(WatcherStoppedMsg); !ok {
+			t.Errorf("expected WatcherStoppedMsg when watcher is stopped, got %T", msg)
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("listenForFileChanges should not block when watcher is stopped")
+	}
+}
+
+func TestApp_WithWatcher_GracefulShutdown(t *testing.T) {
+	// Create a watcher
+	w, err := watcher.New()
+	if err != nil {
+		t.Fatalf("watcher.New() returned error: %v", err)
+	}
+
+	// Create app with watcher
+	app := NewApp([]*parser.ParseResult{}, w, "")
+
+	// Start watcher
+	go w.Start()
+
+	// Get the initial command (should be listenForFileChanges)
+	cmd := app.Init()
+	if cmd == nil {
+		t.Error("Init() should return a command when watcher is present")
+	}
+
+	// Stop the watcher
+	w.Stop()
+
+	// Verify watcher is stopped
+	if !w.Stopped() {
+		t.Error("watcher should be stopped")
+	}
+
+	// App should handle the stopped state gracefully
+	msg := WatcherStoppedMsg{}
+	_, resultCmd := app.Update(msg)
+
+	// Should return nil (no more listening)
+	if resultCmd != nil {
+		t.Error("after WatcherStoppedMsg, should return nil command")
+	}
+}
+
+func TestApp_NoWatcher_Init(t *testing.T) {
+	// App without watcher
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Init should return nil (no file watching)
+	cmd := app.Init()
+	if cmd != nil {
+		t.Error("Init() should return nil when no watcher is present")
+	}
+}
+
+func TestWatcherStoppedMsg_Type(t *testing.T) {
+	// Verify WatcherStoppedMsg is a valid tea.Msg
+	var msg tea.Msg = WatcherStoppedMsg{}
+
+	// Should be the correct type
+	if _, ok := msg.(WatcherStoppedMsg); !ok {
+		t.Error("WatcherStoppedMsg should implement tea.Msg")
 	}
 }
