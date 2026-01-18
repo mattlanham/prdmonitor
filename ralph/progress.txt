@@ -80,6 +80,12 @@
   - Only emits events for files named exactly "prd.json"
 - **Debounce Ordering**: Check operation type BEFORE debouncing
   - Prevents irrelevant events (like CHMOD) from affecting debounce timing for WRITE events
+- **Graceful Shutdown**: `Stop()` properly releases all resources
+  - Closes `done` channel first to signal Start() goroutine to exit
+  - Closes fsnotify watcher to stop receiving events
+  - Closes `events` and `errors` channels to unblock listeners
+  - `Stopped()` method checks if watcher has been stopped
+  - Stop() is idempotent - safe to call multiple times
 
 ### Card Component Pattern
 - Separate `card.go` file for the Card component per AGENTS.md project structure
@@ -489,4 +495,35 @@
   - Column position for mouse events is determined by `msg.X / columnWidth`
   - Scroll indicators (▲ ▼) provide visual feedback about content above/below
   - Position indicator format "(1-5 of 20)" shows current visible range
+---
+
+## 2026-01-18 - PM-014
+- **What was implemented:** Graceful exit and cleanup - proper channel closure, watcher shutdown, and resource cleanup
+- **Files changed:**
+  - `internal/watcher/watcher.go` - Added `stopped` field, enhanced `Stop()` to close channels properly and be idempotent, added `Stopped()` method
+  - `internal/watcher/watcher_test.go` - Added 6 new tests for graceful shutdown behavior
+  - `internal/tui/app.go` - Added `WatcherStoppedMsg` type, updated `listenForFileChanges()` to handle closed channels
+  - `internal/tui/tui_test.go` - Added 8 new tests for graceful exit handling
+- **Tests added:**
+  - TestWatcher_StopClosesChannels - Verifies events/errors channels are closed on Stop()
+  - TestWatcher_Stopped - Tests Stopped() method returns correct state
+  - TestWatcher_StopIsIdempotent - Tests calling Stop() multiple times doesn't panic
+  - TestWatcher_StartExitsOnStop - Tests Start() goroutine exits cleanly when Stop() called
+  - TestWatcher_NoResourceLeaksAfterStop - Tests multiple watcher creation/destruction cycles
+  - TestApp_Update_QuitViaQKey - Tests q key triggers quit command
+  - TestApp_Update_QuitViaCtrlC - Tests Ctrl+C triggers quit command
+  - TestApp_Update_WatcherStoppedMsg - Tests handling of watcher stopped message
+  - TestApp_ListenForFileChanges_HandlesClosedChannel - Tests graceful handling of closed channels
+  - TestApp_WithWatcher_GracefulShutdown - Integration test for watcher shutdown
+  - TestApp_NoWatcher_Init - Tests Init() without watcher
+  - TestWatcherStoppedMsg_Type - Verifies message type implements tea.Msg
+- **Learnings:**
+  - Bubble Tea's `tea.WithAltScreen()` automatically handles terminal state restoration on exit
+  - Channel closure pattern: close fsnotify watcher first, then close our channels to prevent sending on closed channels
+  - Idempotent Stop(): use `stopped` bool flag with mutex to prevent double-close panics
+  - Channel receive with `ok` check: `event, ok := <-channel` returns false when channel is closed
+  - Custom message types (e.g., `WatcherStoppedMsg`) allow TUI to handle external events gracefully
+  - `defer w.Stop()` in main.go ensures cleanup even on panic/early exit
+  - Go channels must be closed by sender, not receiver - watcher owns channels so watcher closes them
+  - Testing goroutine exits: use a done channel to verify Start() returns after Stop()
 ---
