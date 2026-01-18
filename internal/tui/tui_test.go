@@ -2115,3 +2115,592 @@ func TestMin(t *testing.T) {
 		}
 	}
 }
+
+// Scrollable columns tests for PM-013
+
+func TestColumn_ScrollOffset_Initial(t *testing.T) {
+	col := NewColumn("Test", "39")
+
+	// Initial scroll offset should be 0
+	if col.ScrollOffset() != 0 {
+		t.Errorf("expected initial scroll offset 0, got %d", col.ScrollOffset())
+	}
+}
+
+func TestColumn_VisibleCardCount(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 30) // Height of 30
+
+	visibleCount := col.visibleCardCount()
+
+	// Should have a positive visible count
+	if visibleCount <= 0 {
+		t.Errorf("expected positive visible card count, got %d", visibleCount)
+	}
+}
+
+func TestColumn_ScrollUp(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add many cards to enable scrolling
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	// Set scroll offset to 5
+	col.SetScrollOffset(5)
+
+	if col.ScrollOffset() != 5 {
+		t.Errorf("expected scroll offset 5, got %d", col.ScrollOffset())
+	}
+
+	// Scroll up
+	col.ScrollUp()
+
+	if col.ScrollOffset() != 4 {
+		t.Errorf("expected scroll offset 4 after ScrollUp, got %d", col.ScrollOffset())
+	}
+
+	// Scroll up to 0
+	col.SetScrollOffset(0)
+	col.ScrollUp()
+
+	// Should stay at 0
+	if col.ScrollOffset() != 0 {
+		t.Errorf("expected scroll offset 0 (clamped at top), got %d", col.ScrollOffset())
+	}
+}
+
+func TestColumn_ScrollDown(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add many cards to enable scrolling
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	// Initially at 0
+	if col.ScrollOffset() != 0 {
+		t.Errorf("expected initial scroll offset 0, got %d", col.ScrollOffset())
+	}
+
+	// Scroll down
+	col.ScrollDown()
+
+	if col.ScrollOffset() != 1 {
+		t.Errorf("expected scroll offset 1 after ScrollDown, got %d", col.ScrollOffset())
+	}
+
+	// Scroll to max
+	maxOffset := col.maxScrollOffset()
+	col.SetScrollOffset(maxOffset)
+
+	// Try to scroll down past max
+	col.ScrollDown()
+
+	// Should stay at max
+	if col.ScrollOffset() != maxOffset {
+		t.Errorf("expected scroll offset %d (clamped at max), got %d", maxOffset, col.ScrollOffset())
+	}
+}
+
+func TestColumn_SetScrollOffset(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add cards
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	// Set valid offset
+	col.SetScrollOffset(5)
+	if col.ScrollOffset() != 5 {
+		t.Errorf("expected scroll offset 5, got %d", col.ScrollOffset())
+	}
+
+	// Set negative offset (should be clamped to 0)
+	col.SetScrollOffset(-10)
+	if col.ScrollOffset() != 0 {
+		t.Errorf("expected scroll offset 0 (clamped), got %d", col.ScrollOffset())
+	}
+
+	// Set offset beyond max (should be clamped)
+	col.SetScrollOffset(1000)
+	maxOffset := col.maxScrollOffset()
+	if col.ScrollOffset() != maxOffset {
+		t.Errorf("expected scroll offset %d (clamped to max), got %d", maxOffset, col.ScrollOffset())
+	}
+}
+
+func TestColumn_MaxScrollOffset(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// With no cards, max offset is 0
+	if col.maxScrollOffset() != 0 {
+		t.Errorf("expected max offset 0 for empty column, got %d", col.maxScrollOffset())
+	}
+
+	// Add cards
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	maxOffset := col.maxScrollOffset()
+	visibleCount := col.visibleCardCount()
+	expectedMax := 20 - visibleCount
+	if expectedMax < 0 {
+		expectedMax = 0
+	}
+
+	if maxOffset != expectedMax {
+		t.Errorf("expected max offset %d, got %d", expectedMax, maxOffset)
+	}
+}
+
+func TestColumn_EnsureCardVisible_ScrollsDown(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add many cards
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	// Start at top
+	col.SetScrollOffset(0)
+
+	// Select a card that's out of view
+	visibleCount := col.visibleCardCount()
+	targetCard := visibleCount + 2 // Card that should be below the visible area
+
+	col.SetSelected(true, targetCard)
+
+	// Scroll offset should have been adjusted to show the card
+	if col.ScrollOffset() == 0 {
+		t.Error("scroll offset should have changed to show selected card")
+	}
+
+	// Card should now be visible
+	if targetCard < col.ScrollOffset() || targetCard >= col.ScrollOffset()+visibleCount {
+		t.Errorf("card %d should be visible, scroll offset is %d, visible count is %d",
+			targetCard, col.ScrollOffset(), visibleCount)
+	}
+}
+
+func TestColumn_EnsureCardVisible_ScrollsUp(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add many cards
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	// Start at bottom
+	col.SetScrollOffset(10)
+
+	// Select card 2 which is above the visible area
+	col.SetSelected(true, 2)
+
+	// Scroll offset should have been adjusted
+	if col.ScrollOffset() > 2 {
+		t.Errorf("expected scroll offset <= 2, got %d", col.ScrollOffset())
+	}
+}
+
+func TestColumn_View_ShowsScrollIndicator_WhenScrollable(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add many cards to make column scrollable
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID:    fmt.Sprintf("US-%03d", i+1),
+				Title: "Story",
+			},
+		})
+	}
+
+	// Scroll down a bit
+	col.SetScrollOffset(3)
+
+	view := col.View()
+
+	// Should show scroll position indicator (X-Y of Z format)
+	if !strings.Contains(view, "of") {
+		t.Error("scrollable column should show scroll position indicator")
+	}
+
+	// Should show "more above" indicator
+	if !strings.Contains(view, "above") && !strings.Contains(view, "▲") {
+		t.Error("should show 'more above' indicator when scrolled down")
+	}
+}
+
+func TestColumn_View_ShowsMoreBelowIndicator(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 20)
+
+	// Add many cards
+	for i := 0; i < 20; i++ {
+		col.AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID:    fmt.Sprintf("US-%03d", i+1),
+				Title: "Story",
+			},
+		})
+	}
+
+	// At top, there should be more below
+	col.SetScrollOffset(0)
+
+	view := col.View()
+
+	if !strings.Contains(view, "below") && !strings.Contains(view, "▼") {
+		t.Error("should show 'more below' indicator when not at bottom")
+	}
+}
+
+func TestColumn_View_HidesScrollIndicators_WhenNoScrollNeeded(t *testing.T) {
+	col := NewColumn("Test", "39")
+	col.SetSize(40, 100) // Large height
+
+	// Add just a few cards that all fit
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:    "US-001",
+			Title: "Story 1",
+		},
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story: model.UserStory{
+			ID:    "US-002",
+			Title: "Story 2",
+		},
+	})
+
+	view := col.View()
+
+	// Should not show scroll indicators
+	if strings.Contains(view, "more above") || strings.Contains(view, "more below") {
+		t.Error("should not show scroll indicators when all cards fit")
+	}
+}
+
+func TestBoard_ScrollColumnUp(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "TestProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Add many cards to the first column for testing
+	for i := 0; i < 20; i++ {
+		board.columns[0].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	board.SetSize(120, 30)
+
+	// Set initial scroll offset
+	board.columns[0].SetScrollOffset(5)
+
+	// Scroll column 0 up
+	board.ScrollColumnUp(0)
+
+	if board.columns[0].ScrollOffset() != 4 {
+		t.Errorf("expected scroll offset 4, got %d", board.columns[0].ScrollOffset())
+	}
+
+	// Invalid column index should not panic
+	board.ScrollColumnUp(-1)
+	board.ScrollColumnUp(10)
+}
+
+func TestBoard_ScrollColumnDown(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "TestProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Add many cards to the second column for testing
+	for i := 0; i < 20; i++ {
+		board.columns[1].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	board.SetSize(120, 30)
+
+	// Scroll column 1 down
+	board.ScrollColumnDown(1)
+
+	if board.columns[1].ScrollOffset() != 1 {
+		t.Errorf("expected scroll offset 1, got %d", board.columns[1].ScrollOffset())
+	}
+
+	// Invalid column index should not panic
+	board.ScrollColumnDown(-1)
+	board.ScrollColumnDown(10)
+}
+
+func TestColumn_IndependentScrolling(t *testing.T) {
+	// Create a board with cards in all columns
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "TestProject",
+				UserStories: []model.UserStory{
+					{ID: "US-001", Status: model.StatusIncomplete},
+					{ID: "US-002", Status: model.StatusInProgress},
+					{ID: "US-003", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	board := NewBoard(parseResults)
+
+	// Add more cards to each column
+	for i := 0; i < 10; i++ {
+		board.columns[0].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID:     fmt.Sprintf("INC-%03d", i+1),
+				Status: model.StatusIncomplete,
+			},
+		})
+		board.columns[1].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID:     fmt.Sprintf("IP-%03d", i+1),
+				Status: model.StatusInProgress,
+			},
+		})
+		board.columns[2].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID:     fmt.Sprintf("COMP-%03d", i+1),
+				Status: model.StatusComplete,
+			},
+		})
+	}
+
+	board.SetSize(120, 20)
+
+	// Scroll each column independently
+	board.columns[0].SetScrollOffset(3)
+	board.columns[1].SetScrollOffset(5)
+	board.columns[2].SetScrollOffset(1)
+
+	// Verify each column has independent scroll offset
+	if board.columns[0].ScrollOffset() != 3 {
+		t.Errorf("column 0: expected offset 3, got %d", board.columns[0].ScrollOffset())
+	}
+	if board.columns[1].ScrollOffset() != 5 {
+		t.Errorf("column 1: expected offset 5, got %d", board.columns[1].ScrollOffset())
+	}
+	if board.columns[2].ScrollOffset() != 1 {
+		t.Errorf("column 2: expected offset 1, got %d", board.columns[2].ScrollOffset())
+	}
+}
+
+func TestApp_KeyboardNavigation_TriggersScrolling(t *testing.T) {
+	// Create app with many cards in one column
+	stories := make([]model.UserStory, 20)
+	for i := 0; i < 20; i++ {
+		stories[i] = model.UserStory{
+			ID:       fmt.Sprintf("US-%03d", i+1),
+			Status:   model.StatusIncomplete,
+			Priority: i,
+		}
+	}
+
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "TestProject",
+				UserStories: stories,
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 120
+	app.height = 30
+	app.board.SetSize(120, 30)
+
+	// Navigate down multiple times to trigger scrolling
+	for i := 0; i < 10; i++ {
+		msg := tea.KeyMsg{Type: tea.KeyDown}
+		newModel, _ := app.Update(msg)
+		app = newModel.(*App)
+	}
+
+	// The scroll offset should have been adjusted to keep the selected card visible
+	col := app.board.columns[app.board.SelectedColumn()]
+	selectedCard := app.board.SelectedCardIndex()
+	scrollOffset := col.ScrollOffset()
+	visibleCount := col.visibleCardCount()
+
+	// Selected card should be within visible range
+	if selectedCard < scrollOffset || selectedCard >= scrollOffset+visibleCount {
+		t.Errorf("selected card %d should be visible (offset=%d, visible=%d)",
+			selectedCard, scrollOffset, visibleCount)
+	}
+}
+
+func TestApp_MouseWheelScroll(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "TestProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 120
+	app.height = 30
+	app.board.SetSize(120, 30)
+
+	// Add cards to first column
+	for i := 0; i < 20; i++ {
+		app.board.columns[0].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	// Simulate mouse wheel down on first column (X position determines column)
+	msg := tea.MouseMsg{
+		X:    10, // First column
+		Y:    10,
+		Type: tea.MouseWheelDown,
+	}
+
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// First column should have scrolled down
+	if app.board.columns[0].ScrollOffset() != 1 {
+		t.Errorf("expected scroll offset 1 after wheel down, got %d", app.board.columns[0].ScrollOffset())
+	}
+
+	// Simulate mouse wheel up
+	msg = tea.MouseMsg{
+		X:    10,
+		Y:    10,
+		Type: tea.MouseWheelUp,
+	}
+
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	// Should have scrolled back up
+	if app.board.columns[0].ScrollOffset() != 0 {
+		t.Errorf("expected scroll offset 0 after wheel up, got %d", app.board.columns[0].ScrollOffset())
+	}
+}
+
+func TestApp_MouseWheelScroll_BlockedByOverlay(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 120
+	app.height = 30
+	app.board.SetSize(120, 30)
+
+	// Show help overlay
+	app.showHelp = true
+
+	// Add cards to first column
+	for i := 0; i < 20; i++ {
+		app.board.columns[0].AddCard(&Card{
+			ProjectName: "Project",
+			Story: model.UserStory{
+				ID: fmt.Sprintf("US-%03d", i+1),
+			},
+		})
+	}
+
+	initialOffset := app.board.columns[0].ScrollOffset()
+
+	// Try to scroll with mouse wheel while overlay is shown
+	msg := tea.MouseMsg{
+		X:    10,
+		Y:    10,
+		Type: tea.MouseWheelDown,
+	}
+
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Should not have scrolled
+	if app.board.columns[0].ScrollOffset() != initialOffset {
+		t.Error("mouse scroll should be blocked when help overlay is shown")
+	}
+}

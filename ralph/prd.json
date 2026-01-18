@@ -172,7 +172,7 @@
         "Mouse scroll is supported if terminal allows"
       ],
       "priority": 12,
-      "status": "incomplete"
+      "status": "in-progress"
     },
     {
       "id": "PM-014",

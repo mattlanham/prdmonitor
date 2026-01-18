@@ -164,6 +164,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.board.SetSize(msg.Width, msg.Height)
 		a.helpOverlay.SetSize(msg.Width, msg.Height)
 
+	case tea.MouseMsg:
+		// Handle mouse wheel scrolling
+		if a.showHelp || a.expandedCard != nil {
+			// Don't handle mouse when overlays are shown
+			return a, nil
+		}
+		a.handleMouseEvent(msg)
+		return a, nil
+
 	case FileChangedMsg:
 		// Re-parse the changed file and update the board
 		a.handleFileChange(msg)
@@ -172,6 +181,28 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, nil
+}
+
+// handleMouseEvent processes mouse events for scrolling.
+func (a *App) handleMouseEvent(msg tea.MouseMsg) {
+	// Determine which column was clicked based on X position
+	colWidth := a.width / 3
+	colIndex := msg.X / colWidth
+	if colIndex < 0 {
+		colIndex = 0
+	}
+	if colIndex > 2 {
+		colIndex = 2
+	}
+
+	switch msg.Type {
+	case tea.MouseWheelUp:
+		// Scroll up in the target column
+		a.board.ScrollColumnUp(colIndex)
+	case tea.MouseWheelDown:
+		// Scroll down in the target column
+		a.board.ScrollColumnDown(colIndex)
+	}
 }
 
 // handleFileChange processes a file change event and updates the board.
@@ -295,7 +326,7 @@ func Run(parseResults []*parser.ParseResult) error {
 // RunWithWatcher starts the Bubble Tea program with optional file watching.
 func RunWithWatcher(parseResults []*parser.ParseResult, w *watcher.Watcher, rootDir string) error {
 	app := NewApp(parseResults, w, rootDir)
-	p := tea.NewProgram(app, tea.WithAltScreen())
+	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }

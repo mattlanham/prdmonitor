@@ -76,6 +76,8 @@ func (b *Board) MoveRight() {
 func (b *Board) MoveUp() {
 	if b.selectedCard > 0 {
 		b.selectedCard--
+		// Ensure the selected card is visible by triggering scroll adjustment
+		b.ensureSelectedCardVisible()
 	}
 }
 
@@ -84,6 +86,16 @@ func (b *Board) MoveDown() {
 	col := b.columns[b.selectedCol]
 	if b.selectedCard < len(col.cards)-1 {
 		b.selectedCard++
+		// Ensure the selected card is visible by triggering scroll adjustment
+		b.ensureSelectedCardVisible()
+	}
+}
+
+// ensureSelectedCardVisible ensures the currently selected card is visible
+// by adjusting the scroll offset of the current column.
+func (b *Board) ensureSelectedCardVisible() {
+	if b.selectedCol >= 0 && b.selectedCol < len(b.columns) {
+		b.columns[b.selectedCol].ensureCardVisible(b.selectedCard)
 	}
 }
 
@@ -123,6 +135,20 @@ func (b *Board) SelectedColumn() int {
 // SelectedCardIndex returns the index of the currently selected card.
 func (b *Board) SelectedCardIndex() int {
 	return b.selectedCard
+}
+
+// ScrollColumnUp scrolls the specified column up by one card.
+func (b *Board) ScrollColumnUp(colIndex int) {
+	if colIndex >= 0 && colIndex < len(b.columns) {
+		b.columns[colIndex].ScrollUp()
+	}
+}
+
+// ScrollColumnDown scrolls the specified column down by one card.
+func (b *Board) ScrollColumnDown(colIndex int) {
+	if colIndex >= 0 && colIndex < len(b.columns) {
+		b.columns[colIndex].ScrollDown()
+	}
 }
 
 // SetSize updates the board dimensions and distributes width to columns.
