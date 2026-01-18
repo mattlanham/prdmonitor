@@ -1,0 +1,191 @@
+{
+  "name": "PRDMonitor",
+  "branchName": "feature/prd-monitor",
+  "userStories": [
+    {
+      "id": "PM-001",
+      "title": "Project folder selection via CLI argument",
+      "description": "As a user, I want to specify a root folder as a command-line argument so that PRDMonitor knows where to look for prd.json files.",
+      "acceptanceCriteria": [
+        "User can pass folder path as a CLI argument (e.g., prdmonitor /path/to/projects)",
+        "Application validates that the folder exists and is readable",
+        "Default to current directory if no argument provided",
+        "Error message printed to stderr if folder is invalid or inaccessible"
+      ],
+      "priority": 0,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-002",
+      "title": "Subdirectory scanning for prd.json files",
+      "description": "As a user, I want the application to scan all subdirectories for prd.json files so that all my projects are discovered automatically.",
+      "acceptanceCriteria": [
+        "Application recursively scans subdirectories of the selected folder",
+        "Only files named prd.json are detected",
+        "Scanning happens on application startup",
+        "Number of discovered projects is displayed in the TUI header"
+      ],
+      "priority": 1,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-003",
+      "title": "JSON parsing and validation",
+      "description": "As a user, I want prd.json files to be parsed correctly so that user story data is available for display.",
+      "acceptanceCriteria": [
+        "Valid JSON files are parsed without errors",
+        "Project name is extracted from the top-level name field",
+        "User stories array is extracted with id, title, description, and status",
+        "Malformed JSON files are handled gracefully with error logging"
+      ],
+      "priority": 2,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-004",
+      "title": "Terminal UI with Kanban board layout",
+      "description": "As a user, I want to see a terminal-based Kanban board with Incomplete, In Progress, and Complete columns so that I can visualize status without leaving the terminal.",
+      "acceptanceCriteria": [
+        "TUI displays three columns: Incomplete, In Progress, Complete",
+        "Columns are clearly labeled with distinct visual styling",
+        "Layout adapts to terminal width",
+        "Empty columns display a placeholder message",
+        "Uses a Go TUI library such as bubbletea or tview"
+      ],
+      "priority": 3,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-005",
+      "title": "User story card display",
+      "description": "As a user, I want each user story displayed as a card showing the id, title, description, and project name so that I can quickly understand what each story is about.",
+      "acceptanceCriteria": [
+        "Each card displays the user story id prominently",
+        "Card shows the title in bold or highlighted text",
+        "Description is displayed below the title (truncated if needed)",
+        "Project name from prd.json name field appears at the top of the card",
+        "Cards use box-drawing characters or borders for visual separation"
+      ],
+      "priority": 4,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-006",
+      "title": "Status-based card sorting",
+      "description": "As a user, I want user stories automatically sorted into the correct column based on their status field so that the board accurately reflects project progress.",
+      "acceptanceCriteria": [
+        "Stories with status incomplete appear in the Incomplete column",
+        "Stories with status in-progress appear in the In Progress column",
+        "Stories with status complete appear in the Complete column",
+        "Unknown status values default to the Incomplete column"
+      ],
+      "priority": 5,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-007",
+      "title": "File change detection and live updates",
+      "description": "As a user, I want the board to automatically update when prd.json files are modified so that I always see the current state without restarting.",
+      "acceptanceCriteria": [
+        "File system watcher monitors all discovered prd.json files using fsnotify",
+        "Changes to existing files trigger a re-parse and TUI refresh",
+        "Board updates within 2 seconds of file change",
+        "TUI remains responsive during file watching"
+      ],
+      "priority": 6,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-008",
+      "title": "New file detection",
+      "description": "As a user, I want newly created prd.json files to be automatically discovered so that new projects appear on the board without restarting the application.",
+      "acceptanceCriteria": [
+        "New prd.json files in existing subdirectories are detected",
+        "New subdirectories with prd.json files are detected",
+        "New projects appear on the board automatically",
+        "Detection occurs within 5 seconds of file creation"
+      ],
+      "priority": 7,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-009",
+      "title": "Read-only board interface",
+      "description": "As a user, I want the board to be read-only so that changes can only be made by editing the prd.json files directly.",
+      "acceptanceCriteria": [
+        "Cards cannot be moved or edited via keyboard or mouse",
+        "No edit commands are available in the TUI",
+        "Status bar indicates the board is view-only",
+        "Helpful message suggests editing prd.json files directly"
+      ],
+      "priority": 8,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-010",
+      "title": "File deletion handling",
+      "description": "As a user, I want projects to be removed from the board when their prd.json file is deleted so that the board stays accurate.",
+      "acceptanceCriteria": [
+        "Deleted prd.json files are detected by the file watcher",
+        "Associated project cards are removed from the board",
+        "Removal happens automatically without manual intervention",
+        "No orphaned cards remain after file deletion"
+      ],
+      "priority": 9,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-011",
+      "title": "Multi-project aggregation",
+      "description": "As a user, I want to see user stories from all discovered projects on a single board so that I have a unified view of all work.",
+      "acceptanceCriteria": [
+        "Cards from multiple prd.json files appear on the same board",
+        "Project name on each card distinguishes which project it belongs to",
+        "Cards are sorted by status regardless of source project",
+        "Board handles at least 20 projects without performance issues"
+      ],
+      "priority": 10,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-012",
+      "title": "Keyboard navigation",
+      "description": "As a user, I want to navigate the board using keyboard shortcuts so that I can efficiently browse user stories.",
+      "acceptanceCriteria": [
+        "Arrow keys or hjkl navigate between cards and columns",
+        "Enter or space expands a card to show full description",
+        "Tab cycles between columns",
+        "q or Ctrl+C quits the application",
+        "? displays a help overlay with available shortcuts"
+      ],
+      "priority": 11,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-013",
+      "title": "Scrollable columns",
+      "description": "As a user, I want to scroll within columns when there are more cards than fit on screen so that I can view all user stories.",
+      "acceptanceCriteria": [
+        "Columns are independently scrollable",
+        "Scroll position indicator shows current position",
+        "Scrolling works via keyboard navigation",
+        "Mouse scroll is supported if terminal allows"
+      ],
+      "priority": 12,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-014",
+      "title": "Graceful exit and cleanup",
+      "description": "As a user, I want the application to exit cleanly and restore my terminal state so that my terminal is not left in a broken state.",
+      "acceptanceCriteria": [
+        "Terminal state is restored on exit",
+        "File watchers are properly closed",
+        "Exit works via q key or Ctrl+C",
+        "No zombie processes or resource leaks"
+      ],
+      "priority": 13,
+      "status": "incomplete"
+    }
+  ]
+}
