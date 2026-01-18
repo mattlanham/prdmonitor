@@ -93,7 +93,7 @@
         "TUI remains responsive during file watching"
       ],
       "priority": 6,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-008",
