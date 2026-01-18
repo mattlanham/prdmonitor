@@ -236,7 +236,7 @@
         "Title adapts or truncates gracefully on narrow terminals"
       ],
       "priority": 17,
-      "status": "incomplete"
+      "status": "in-progress"
     },
     {
       "id": "PM-016",
@@ -264,6 +264,20 @@
         "Filter persists during the session but resets on restart"
       ],
       "priority": 19,
+      "status": "incomplete"
+    },
+    {
+      "id": "PM-018",
+      "title": "Fast prd.json file discovery",
+      "description": "As a user, I want prd.json files to be discovered quickly even in large directory trees so that the application starts fast and remains responsive.",
+      "acceptanceCriteria": [
+        "File discovery completes within seconds even for large directories like ~/Developer",
+        "Common non-project directories are skipped (node_modules, .git, vendor, __pycache__, etc.)",
+        "Consider using fd or parallel directory walking for improved performance",
+        "Progress indicator shows scanning is in progress for large directories",
+        "Application remains responsive during file discovery"
+      ],
+      "priority": 20,
       "status": "incomplete"
     }
   ]
