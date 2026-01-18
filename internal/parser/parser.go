@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"lanham/prdmonitor/internal/model"
 )
@@ -13,6 +14,7 @@ import (
 type ParseResult struct {
 	PRD      *model.PRD
 	FilePath string
+	ModTime  time.Time // Last modification time of the source file
 }
 
 // ParseError represents an error that occurred while parsing a prd.json file.
@@ -33,6 +35,12 @@ func (e *ParseError) Unwrap() error {
 // It returns a ParseResult on success, or a ParseError if the file
 // cannot be read or contains invalid JSON.
 func ParseFile(filePath string) (*ParseResult, error) {
+	// Get file info for modification time
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return nil, &ParseError{FilePath: filePath, Err: err}
+	}
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, &ParseError{FilePath: filePath, Err: err}
@@ -46,6 +54,7 @@ func ParseFile(filePath string) (*ParseResult, error) {
 	return &ParseResult{
 		PRD:      prd,
 		FilePath: filePath,
+		ModTime:  fileInfo.ModTime(),
 	}, nil
 }
 

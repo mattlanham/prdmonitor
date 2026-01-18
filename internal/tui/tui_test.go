@@ -573,51 +573,172 @@ func TestColumn_SortByPriority_SamePriority(t *testing.T) {
 	}
 }
 
-func TestNewBoard_SortsCardsByPriority(t *testing.T) {
+// PM-022: Sort cards by date changed
+
+func TestColumn_SortByModTime(t *testing.T) {
+	col := NewColumn("Test", "39")
+	now := time.Now()
+
+	// Add cards with different modification times (in non-sorted order)
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-002", Title: "Middle"},
+		ModTime:     now.Add(-1 * time.Hour),
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-003", Title: "Oldest"},
+		ModTime:     now.Add(-2 * time.Hour),
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001", Title: "Newest"},
+		ModTime:     now,
+	})
+
+	// Sort by modification time
+	col.SortByModTime()
+
+	// Verify order: most recent first
+	if len(col.cards) != 3 {
+		t.Fatalf("expected 3 cards, got %d", len(col.cards))
+	}
+
+	expectedIDs := []string{"US-001", "US-002", "US-003"}
+	for i, expectedID := range expectedIDs {
+		if col.cards[i].Story.ID != expectedID {
+			t.Errorf("card %d: expected ID %q, got %q", i, expectedID, col.cards[i].Story.ID)
+		}
+	}
+}
+
+func TestColumn_SortByModTime_EmptyColumn(t *testing.T) {
+	col := NewColumn("Test", "39")
+
+	// Should not panic on empty column
+	col.SortByModTime()
+
+	if len(col.cards) != 0 {
+		t.Error("empty column should remain empty after sort")
+	}
+}
+
+func TestColumn_SortByModTime_SingleCard(t *testing.T) {
+	col := NewColumn("Test", "39")
+	now := time.Now()
+
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001"},
+		ModTime:     now,
+	})
+
+	col.SortByModTime()
+
+	if len(col.cards) != 1 || col.cards[0].Story.ID != "US-001" {
+		t.Error("single card should remain in place after sort")
+	}
+}
+
+func TestColumn_SortByModTime_SameModTime(t *testing.T) {
+	col := NewColumn("Test", "39")
+	now := time.Now()
+
+	// Add cards with same modification time
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001"},
+		ModTime:     now,
+	})
+	col.AddCard(&Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-002"},
+		ModTime:     now,
+	})
+
+	col.SortByModTime()
+
+	// Both cards should still be present
+	if len(col.cards) != 2 {
+		t.Fatalf("expected 2 cards, got %d", len(col.cards))
+	}
+
+	// Both cards should have the same ModTime
+	if !col.cards[0].ModTime.Equal(now) || !col.cards[1].ModTime.Equal(now) {
+		t.Error("cards with same ModTime should both be present")
+	}
+}
+
+func TestNewCardWithModTime(t *testing.T) {
+	now := time.Now()
+	story := model.UserStory{ID: "US-001", Title: "Test Story"}
+
+	card := NewCardWithModTime("TestProject", story, now)
+
+	if card.ProjectName != "TestProject" {
+		t.Errorf("expected project name 'TestProject', got %q", card.ProjectName)
+	}
+	if card.Story.ID != "US-001" {
+		t.Errorf("expected story ID 'US-001', got %q", card.Story.ID)
+	}
+	if !card.ModTime.Equal(now) {
+		t.Errorf("expected ModTime %v, got %v", now, card.ModTime)
+	}
+}
+
+func TestCard_ModTime_Field(t *testing.T) {
+	// Test that cards track modification time
+	now := time.Now()
+	card := &Card{
+		ProjectName: "Project",
+		Story:       model.UserStory{ID: "US-001"},
+		ModTime:     now,
+	}
+
+	if card.ModTime.IsZero() {
+		t.Error("card ModTime should not be zero")
+	}
+	if !card.ModTime.Equal(now) {
+		t.Errorf("expected ModTime %v, got %v", now, card.ModTime)
+	}
+}
+
+func TestNewBoard_SortsByModTime(t *testing.T) {
+	// Set up times: most recent first when sorted
+	now := time.Now()
 	parseResults := []*parser.ParseResult{
 		{
 			PRD: &model.PRD{
 				Name: "TestProject",
 				UserStories: []model.UserStory{
-					{ID: "US-003", Title: "Low Priority", Status: model.StatusIncomplete, Priority: 10},
-					{ID: "US-001", Title: "High Priority", Status: model.StatusIncomplete, Priority: 0},
-					{ID: "US-002", Title: "Medium Priority", Status: model.StatusIncomplete, Priority: 5},
+					{ID: "US-003", Title: "Oldest", Status: model.StatusIncomplete, Priority: 10},
+					{ID: "US-001", Title: "Newest", Status: model.StatusIncomplete, Priority: 0},
+					{ID: "US-002", Title: "Middle", Status: model.StatusIncomplete, Priority: 5},
 				},
 			},
 			FilePath: "/test/prd.json",
+			ModTime:  now, // All stories from same file have same ModTime
 		},
 	}
 
 	board := NewBoard(parseResults)
 
-	// Check that Incomplete column has cards sorted by priority
+	// Check that Incomplete column has all 3 cards
 	incompleteCol := board.columns[0]
 	if len(incompleteCol.cards) != 3 {
 		t.Fatalf("expected 3 cards in Incomplete column, got %d", len(incompleteCol.cards))
 	}
 
-	// Verify order: priority 0, 5, 10
-	expectedOrder := []struct {
-		id       string
-		priority int
-	}{
-		{"US-001", 0},
-		{"US-002", 5},
-		{"US-003", 10},
-	}
-
-	for i, expected := range expectedOrder {
-		card := incompleteCol.cards[i]
-		if card.Story.ID != expected.id {
-			t.Errorf("card %d: expected ID %q, got %q", i, expected.id, card.Story.ID)
-		}
-		if card.Story.Priority != expected.priority {
-			t.Errorf("card %d: expected priority %d, got %d", i, expected.priority, card.Story.Priority)
+	// All cards should have the same ModTime since they're from the same file
+	for _, card := range incompleteCol.cards {
+		if !card.ModTime.Equal(now) {
+			t.Errorf("expected card ModTime to be %v, got %v", now, card.ModTime)
 		}
 	}
 }
 
-func TestNewBoard_SortsAcrossMultipleProjects(t *testing.T) {
+func TestNewBoard_SortsByModTimeAcrossMultipleProjects(t *testing.T) {
+	now := time.Now()
 	parseResults := []*parser.ParseResult{
 		{
 			PRD: &model.PRD{
@@ -627,6 +748,7 @@ func TestNewBoard_SortsAcrossMultipleProjects(t *testing.T) {
 				},
 			},
 			FilePath: "/test/a/prd.json",
+			ModTime:  now.Add(-1 * time.Hour), // Older
 		},
 		{
 			PRD: &model.PRD{
@@ -636,25 +758,26 @@ func TestNewBoard_SortsAcrossMultipleProjects(t *testing.T) {
 				},
 			},
 			FilePath: "/test/b/prd.json",
+			ModTime:  now, // Newer - should appear first
 		},
 	}
 
 	board := NewBoard(parseResults)
 
-	// Check that In Progress column has cards sorted by priority across projects
+	// Check that In Progress column has cards sorted by ModTime (most recent first)
 	inProgressCol := board.columns[1]
 	if len(inProgressCol.cards) != 2 {
 		t.Fatalf("expected 2 cards in In Progress column, got %d", len(inProgressCol.cards))
 	}
 
-	// B-001 (priority 1) should come before A-001 (priority 5)
+	// B-001 (newer ModTime) should come before A-001 (older ModTime)
 	if inProgressCol.cards[0].Story.ID != "B-001" {
-		t.Errorf("expected first card to be B-001 (priority 1), got %s (priority %d)",
-			inProgressCol.cards[0].Story.ID, inProgressCol.cards[0].Story.Priority)
+		t.Errorf("expected first card to be B-001 (more recent), got %s",
+			inProgressCol.cards[0].Story.ID)
 	}
 	if inProgressCol.cards[1].Story.ID != "A-001" {
-		t.Errorf("expected second card to be A-001 (priority 5), got %s (priority %d)",
-			inProgressCol.cards[1].Story.ID, inProgressCol.cards[1].Story.Priority)
+		t.Errorf("expected second card to be A-001 (older), got %s",
+			inProgressCol.cards[1].Story.ID)
 	}
 }
 
@@ -1037,64 +1160,64 @@ func TestNewBoard_MultiProjectAggregation_CardsDistinguishedByProjectName(t *tes
 	}
 }
 
-func TestNewBoard_MultiProject_SortsByPriorityAcrossAllProjects(t *testing.T) {
-	// Test that cards from different projects are sorted by priority regardless of source
+func TestNewBoard_MultiProject_SortsByModTimeAcrossAllProjects(t *testing.T) {
+	// Test that cards from different projects are sorted by modification time (most recent first)
+	now := time.Now()
 	parseResults := []*parser.ParseResult{
 		{
 			PRD: &model.PRD{
 				Name: "ProjectC",
 				UserStories: []model.UserStory{
-					{ID: "C-001", Title: "Low Priority", Status: model.StatusIncomplete, Priority: 10},
+					{ID: "C-001", Title: "Oldest", Status: model.StatusIncomplete, Priority: 10},
 				},
 			},
 			FilePath: "/projects/c/prd.json",
+			ModTime:  now.Add(-2 * time.Hour), // Oldest
 		},
 		{
 			PRD: &model.PRD{
 				Name: "ProjectA",
 				UserStories: []model.UserStory{
-					{ID: "A-001", Title: "High Priority", Status: model.StatusIncomplete, Priority: 0},
+					{ID: "A-001", Title: "Newest", Status: model.StatusIncomplete, Priority: 0},
 				},
 			},
 			FilePath: "/projects/a/prd.json",
+			ModTime:  now, // Newest - should be first
 		},
 		{
 			PRD: &model.PRD{
 				Name: "ProjectB",
 				UserStories: []model.UserStory{
-					{ID: "B-001", Title: "Medium Priority", Status: model.StatusIncomplete, Priority: 5},
+					{ID: "B-001", Title: "Middle", Status: model.StatusIncomplete, Priority: 5},
 				},
 			},
 			FilePath: "/projects/b/prd.json",
+			ModTime:  now.Add(-1 * time.Hour), // Middle
 		},
 	}
 
 	board := NewBoard(parseResults)
 
-	// Verify cards are sorted by priority, not by project order
+	// Verify cards are sorted by modification time, not by project order or priority
 	incompleteCol := board.columns[0]
 	if len(incompleteCol.cards) != 3 {
 		t.Fatalf("Expected 3 cards, got %d", len(incompleteCol.cards))
 	}
 
-	// Expected order by priority: A-001 (0), B-001 (5), C-001 (10)
+	// Expected order by ModTime (most recent first): A-001, B-001, C-001
 	expectedOrder := []struct {
-		id       string
-		priority int
-		project  string
+		id      string
+		project string
 	}{
-		{"A-001", 0, "ProjectA"},
-		{"B-001", 5, "ProjectB"},
-		{"C-001", 10, "ProjectC"},
+		{"A-001", "ProjectA"}, // Newest
+		{"B-001", "ProjectB"}, // Middle
+		{"C-001", "ProjectC"}, // Oldest
 	}
 
 	for i, expected := range expectedOrder {
 		card := incompleteCol.cards[i]
 		if card.Story.ID != expected.id {
 			t.Errorf("Card %d: expected ID %q, got %q", i, expected.id, card.Story.ID)
-		}
-		if card.Story.Priority != expected.priority {
-			t.Errorf("Card %d: expected priority %d, got %d", i, expected.priority, card.Story.Priority)
 		}
 		if card.ProjectName != expected.project {
 			t.Errorf("Card %d: expected project %q, got %q", i, expected.project, card.ProjectName)

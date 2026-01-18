@@ -39,6 +39,9 @@
 - Custom `ParseError` type wraps file path with underlying error, implements `Unwrap()` for error chains
 - Use `errors.As()` to check for specific error types in tests
 - JSON unmarshaling handles missing fields gracefully (zero values)
+- **File Modification Time**: `ParseResult.ModTime` captures file's last modification time
+  - Used for sorting cards by "date changed"
+  - Retrieved via `os.Stat()` before reading file content
 
 ### TUI Package (Bubble Tea)
 - Uses Model-Update-View pattern with `tea.Model` interface
@@ -105,8 +108,9 @@
 
 ### Card Component Pattern
 - Separate `card.go` file for the Card component per AGENTS.md project structure
-- `Card` struct holds `ProjectName` and `Story` (model.UserStory)
-- `NewCard(projectName, story)` constructor for creating cards
+- `Card` struct holds `ProjectName`, `Story` (model.UserStory), and `ModTime` (time.Time)
+- `NewCard(projectName, story)` constructor for creating cards (deprecated, uses zero ModTime)
+- `NewCardWithModTime(projectName, story, modTime)` constructor for cards with modification time
 - `Card.Render(width)` method returns styled string output
 - `CardStyle` struct for customizable styling (border, project, ID, title, description colors)
 - `DefaultCardStyle()` provides sensible defaults
@@ -156,6 +160,14 @@
 - `rebuildBoard()` method applies current filter and resizes board
 - When filtered project is deleted, reset filter to "All Projects"
 - Filter persists during session but resets on restart (not persisted to disk)
+
+### Card Sorting Pattern
+- Cards in columns are sorted by file modification time (most recently changed first)
+- `Column.SortByModTime()` sorts cards by `Card.ModTime` in descending order (newest first)
+- `Column.SortByPriority()` still available for priority-based sorting (lower values first)
+- Board's `NewBoardWithFilter()` uses `SortByModTime()` for all columns
+- All stories from the same prd.json file share the same ModTime
+- Sorting updates automatically when files are re-parsed (on file change detection)
 
 ---
 
@@ -831,4 +843,63 @@
   - `\r\033[K` clears the current line for overwriting progress text
   - Runtime.NumCPU() determines optimal worker count, but cap at 8 to avoid too many file handles
   - Skip dirs were already implemented (BUG-003), PM-018 focused on parallelism and progress
+---
+
+## 2026-01-18 - PM-021
+- **What was implemented:** Active project filter indicator - a prominent visual badge in the header area when a filter is active
+- **Files changed:**
+  - `internal/tui/app.go` - Added FilterIndicatorPrefix constant, renderFilterIndicator() method, IsFilterActive() method, updated View() to render indicator between header and board
+  - `internal/tui/tui_test.go` - Added 9 new tests for filter indicator functionality
+- **Tests added:**
+  - TestFilterIndicatorPrefix_Constant - Verifies constant exists with expected value
+  - TestApp_IsFilterActive_AllProjects - Tests filter is not active for "All Projects"
+  - TestApp_IsFilterActive_SpecificProject - Tests filter is active for specific projects
+  - TestApp_RenderFilterIndicator_NotShownForAllProjects - Tests indicator hidden for "All Projects" and empty filter
+  - TestApp_RenderFilterIndicator_ShownForActiveFilter - Tests indicator contains prefix and project name
+  - TestApp_View_ShowsFilterIndicatorInHeader_WhenFilterActive - Tests indicator visible in View()
+  - TestApp_View_HidesFilterIndicator_WhenNoFilter - Tests indicator hidden when no filter
+  - TestApp_View_FilterIndicatorDisappearsWhenCleared - Tests indicator disappears when filter cleared
+  - TestApp_View_FilterIndicatorVisibleInHeaderArea - Tests indicator appears before board columns
+- **Learnings:**
+  - Filter indicator pattern: render conditionally in View() based on IsFilterActive()
+  - Badge styling: use Background color with contrasting Foreground for visibility (yellow bg, black text)
+  - The indicator should appear in the header area (above the board) for prominence, not just in the status bar
+  - Lip Gloss alignment: use `Width(w).Align(lipgloss.Center)` to center an element within its container
+  - Dynamic content in View(): build slice of content parts and use `lipgloss.JoinVertical(lipgloss.Left, parts...)`
+  - Board height adjustment is optional for small indicators (1-2 lines) - acceptable UX tradeoff vs complexity
+  - Use constants for indicator text (FilterIndicatorPrefix) to make tests more reliable and code more maintainable
+  - Test for position: use `strings.Index()` to verify indicator appears before board content
+  - Both visual indicator in header AND status bar show filter for redundancy and clarity
+---
+
+## 2026-01-18 - PM-022
+- **What was implemented:** Sort cards by date changed - cards are now ordered by file modification time within each column, with most recently changed files appearing at the top
+- **Files changed:**
+  - `internal/parser/parser.go` - Added `ModTime` field to `ParseResult`, captures file modification time via `os.Stat()`
+  - `internal/parser/parser_test.go` - Added 2 tests for ModTime capture functionality
+  - `internal/tui/card.go` - Added `ModTime` field to `Card` struct, added `NewCardWithModTime()` constructor
+  - `internal/tui/column.go` - Added `SortByModTime()` method for modification time sorting
+  - `internal/tui/board.go` - Updated `NewBoardWithFilter()` to use `NewCardWithModTime()` and `SortByModTime()`
+  - `internal/tui/tui_test.go` - Updated 3 existing sorting tests to reflect ModTime behavior, added 7 new tests for ModTime sorting
+  - `ralph/progress.txt` - Added Card Sorting Pattern to Codebase Patterns section
+- **Tests added:**
+  - TestColumn_SortByModTime - Tests sorting by modification time (most recent first)
+  - TestColumn_SortByModTime_EmptyColumn - Tests empty column handling
+  - TestColumn_SortByModTime_SingleCard - Tests single card edge case
+  - TestColumn_SortByModTime_SameModTime - Tests cards with equal modification time
+  - TestNewCardWithModTime - Tests new card constructor with ModTime
+  - TestCard_ModTime_Field - Tests card stores modification time correctly
+  - TestParseFile_CapturesModTime - Tests parser captures file modification time
+  - TestParseFile_ModTimeUpdatesOnReparse - Tests ModTime updates when file is re-parsed
+  - TestNewBoard_SortsByModTime - Tests board sorts by ModTime instead of priority
+  - TestNewBoard_SortsByModTimeAcrossMultipleProjects - Tests cross-project sorting by ModTime
+  - TestNewBoard_MultiProject_SortsByModTimeAcrossAllProjects - Tests multiple projects sorted by ModTime
+- **Learnings:**
+  - File modification time is accessible via `os.Stat()` before reading file content
+  - `time.Time` comparison: use `time.After()` for descending sort (newer first), `time.Before()` for ascending
+  - All user stories from the same prd.json share the same ModTime (file-level, not story-level)
+  - Replacing a sorting strategy (priority → ModTime) requires updating tests that assumed the old behavior
+  - Keep old sorting method (`SortByPriority()`) available for backward compatibility and alternative use cases
+  - Use explicit constructor (`NewCardWithModTime`) vs modifying existing one to maintain backward compatibility
+  - Test file modification time with small delays on some file systems with coarse granularity (1-second resolution)
 ---

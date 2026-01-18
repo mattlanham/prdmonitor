@@ -150,6 +150,15 @@ func (c *Column) SortByPriority() {
 	})
 }
 
+// SortByModTime sorts cards by modification time (most recently changed first).
+// Cards with more recent modification times appear at the top of the column.
+func (c *Column) SortByModTime() {
+	sort.Slice(c.cards, func(i, j int) bool {
+		// Most recent first (descending order)
+		return c.cards[i].ModTime.After(c.cards[j].ModTime)
+	})
+}
+
 // SetSize updates the column dimensions.
 func (c *Column) SetSize(width, height int) {
 	c.width = width

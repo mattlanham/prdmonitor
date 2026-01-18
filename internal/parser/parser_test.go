@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"lanham/prdmonitor/internal/model"
 )
@@ -376,5 +377,79 @@ func TestParseBytes_AllStatusValues(t *testing.T) {
 				t.Errorf("expected status '%s', got '%s'", tc.expected, prd.UserStories[0].Status)
 			}
 		})
+	}
+}
+
+// PM-022: Test that ParseFile captures file modification time
+
+func TestParseFile_CapturesModTime(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "prd.json")
+
+	content := []byte(`{"name": "Test", "userStories": []}`)
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	result, err := ParseFile(filePath)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// ModTime should not be zero
+	if result.ModTime.IsZero() {
+		t.Error("ParseResult ModTime should not be zero")
+	}
+
+	// ModTime should match the file's actual modification time
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("failed to stat file: %v", err)
+	}
+
+	if !result.ModTime.Equal(fileInfo.ModTime()) {
+		t.Errorf("expected ModTime %v, got %v", fileInfo.ModTime(), result.ModTime)
+	}
+}
+
+func TestParseFile_ModTimeUpdatesOnReparse(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "prd.json")
+
+	// Write initial file
+	content := []byte(`{"name": "Test1", "userStories": []}`)
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	result1, err := ParseFile(filePath)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Small delay to ensure different modification time
+	// (some file systems have 1-second resolution)
+	<-time.After(50 * time.Millisecond)
+
+	// Update file with new content
+	content2 := []byte(`{"name": "Test2", "userStories": []}`)
+	if err := os.WriteFile(filePath, content2, 0644); err != nil {
+		t.Fatalf("failed to write updated file: %v", err)
+	}
+
+	result2, err := ParseFile(filePath)
+	if err != nil {
+		t.Fatalf("ParseFile failed on second parse: %v", err)
+	}
+
+	// Content should be updated
+	if result2.PRD.Name != "Test2" {
+		t.Errorf("expected name 'Test2', got %q", result2.PRD.Name)
+	}
+
+	// ModTime should be equal or newer (some file systems may have coarse granularity)
+	if result2.ModTime.Before(result1.ModTime) {
+		t.Errorf("expected ModTime to be equal or newer: first=%v, second=%v",
+			result1.ModTime, result2.ModTime)
 	}
 }

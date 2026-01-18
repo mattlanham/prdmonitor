@@ -27,6 +27,7 @@ func NewBoard(parseResults []*parser.ParseResult) *Board {
 
 // NewBoardWithFilter creates a new Board from the parsed PRD results with an optional project filter.
 // If projectFilter is empty or "All Projects", all projects are shown.
+// Cards are sorted by modification time (most recently changed first).
 func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string) *Board {
 	// Create the three columns
 	incompleteCol := NewColumn("Incomplete", lipgloss.Color("203"))  // Red-ish
@@ -43,7 +44,8 @@ func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string
 		}
 
 		for _, story := range result.PRD.UserStories {
-			card := NewCard(projectName, story)
+			// Use modification time from the parse result for sorting
+			card := NewCardWithModTime(projectName, story, result.ModTime)
 
 			switch story.Status {
 			case model.StatusInProgress:
@@ -57,10 +59,10 @@ func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string
 		}
 	}
 
-	// Sort cards within each column by priority (lower priority values first)
-	incompleteCol.SortByPriority()
-	inProgressCol.SortByPriority()
-	completeCol.SortByPriority()
+	// Sort cards within each column by modification time (most recently changed first)
+	incompleteCol.SortByModTime()
+	inProgressCol.SortByModTime()
+	completeCol.SortByModTime()
 
 	return &Board{
 		columns:      []*Column{incompleteCol, inProgressCol, completeCol},

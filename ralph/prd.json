@@ -318,7 +318,7 @@
         "Indicator disappears when filter is cleared or set to 'All Projects'"
       ],
       "priority": 23,
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "id": "PM-022",
@@ -331,7 +331,7 @@
         "Date changed is tracked based on file modification time or story content changes"
       ],
       "priority": 24,
-      "status": "incomplete"
+      "status": "in-progress"
     },
     {
       "id": "PM-023",

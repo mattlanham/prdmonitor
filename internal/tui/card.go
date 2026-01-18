@@ -3,6 +3,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -13,6 +14,7 @@ import (
 type Card struct {
 	ProjectName string
 	Story       model.UserStory
+	ModTime     time.Time // Last modification time of the source prd.json file
 }
 
 // CardStyle holds the styling configuration for a card.
@@ -150,10 +152,21 @@ func truncateString(s string, maxLen int) string {
 }
 
 // NewCard creates a new Card with the given project name and user story.
+// Deprecated: Use NewCardWithModTime instead to include modification time for sorting.
 func NewCard(projectName string, story model.UserStory) *Card {
 	return &Card{
 		ProjectName: projectName,
 		Story:       story,
+		ModTime:     time.Time{}, // Zero time when not specified
+	}
+}
+
+// NewCardWithModTime creates a new Card with the given project name, user story, and modification time.
+func NewCardWithModTime(projectName string, story model.UserStory, modTime time.Time) *Card {
+	return &Card{
+		ProjectName: projectName,
+		Story:       story,
+		ModTime:     modTime,
 	}
 }
 
