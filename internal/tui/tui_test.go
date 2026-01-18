@@ -206,7 +206,7 @@ func TestColumn_View_WithCards(t *testing.T) {
 	}
 }
 
-func TestTruncate(t *testing.T) {
+func TestTruncateString(t *testing.T) {
 	tests := []struct {
 		input    string
 		maxLen   int
@@ -222,9 +222,9 @@ func TestTruncate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := truncate(tt.input, tt.maxLen)
+		result := truncateString(tt.input, tt.maxLen)
 		if result != tt.expected {
-			t.Errorf("truncate(%q, %d) = %q, expected %q", tt.input, tt.maxLen, result, tt.expected)
+			t.Errorf("truncateString(%q, %d) = %q, expected %q", tt.input, tt.maxLen, result, tt.expected)
 		}
 	}
 }
@@ -273,5 +273,185 @@ func TestBoard_SetSize(t *testing.T) {
 		if col.width == 0 {
 			t.Error("column width should be set")
 		}
+	}
+}
+
+// Card component tests
+
+func TestNewCard(t *testing.T) {
+	story := model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Story",
+		Description: "A test description",
+		Status:      model.StatusIncomplete,
+	}
+
+	card := NewCard("MyProject", story)
+
+	if card.ProjectName != "MyProject" {
+		t.Errorf("expected ProjectName 'MyProject', got %q", card.ProjectName)
+	}
+
+	if card.Story.ID != "US-001" {
+		t.Errorf("expected Story.ID 'US-001', got %q", card.Story.ID)
+	}
+}
+
+func TestCard_Render_ContainsProjectName(t *testing.T) {
+	card := NewCard("MyProject", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Title",
+		Description: "Test Description",
+	})
+
+	view := card.Render(40)
+
+	if !strings.Contains(view, "MyProject") {
+		t.Error("card should display project name")
+	}
+}
+
+func TestCard_Render_ContainsStoryID(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Title",
+		Description: "Test Description",
+	})
+
+	view := card.Render(40)
+
+	if !strings.Contains(view, "US-001") {
+		t.Error("card should display story ID prominently")
+	}
+}
+
+func TestCard_Render_ContainsTitle(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Title",
+		Description: "Test Description",
+	})
+
+	view := card.Render(40)
+
+	if !strings.Contains(view, "Test Title") {
+		t.Error("card should display title")
+	}
+}
+
+func TestCard_Render_ContainsDescription(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Title",
+		Description: "Test Description",
+	})
+
+	view := card.Render(40)
+
+	if !strings.Contains(view, "Test Description") {
+		t.Error("card should display description")
+	}
+}
+
+func TestCard_Render_TruncatesLongDescription(t *testing.T) {
+	longDesc := "This is a very long description that should be truncated when the width is small"
+	card := NewCard("Project", model.UserStory{
+		ID:          "US-001",
+		Title:       "Title",
+		Description: longDesc,
+	})
+
+	view := card.Render(20) // Small width to force truncation
+
+	// Should contain ellipsis if truncated
+	if len(longDesc) > 16 && !strings.Contains(view, "...") {
+		t.Error("long description should be truncated with ellipsis")
+	}
+}
+
+func TestCard_Render_EmptyDescription(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Title",
+		Description: "",
+	})
+
+	// Should not panic on empty description
+	view := card.Render(40)
+
+	if !strings.Contains(view, "US-001") {
+		t.Error("card should still render with empty description")
+	}
+}
+
+func TestCard_Render_HasBorder(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:    "US-001",
+		Title: "Title",
+	})
+
+	view := card.Render(40)
+
+	// Check for rounded border characters
+	if !strings.ContainsAny(view, "╭╮╯╰│─") {
+		t.Error("card should have box-drawing border characters")
+	}
+}
+
+func TestCard_RenderWithStyle(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:          "US-001",
+		Title:       "Test Title",
+		Description: "Description",
+	})
+
+	customStyle := CardStyle{
+		BorderColor:      "255",
+		ProjectColor:     "39",
+		IDColor:          "205",
+		TitleColor:       "255",
+		DescriptionColor: "247",
+	}
+
+	// Should not panic with custom style
+	view := card.RenderWithStyle(40, customStyle)
+
+	if !strings.Contains(view, "US-001") {
+		t.Error("card should render with custom style")
+	}
+}
+
+func TestDefaultCardStyle(t *testing.T) {
+	style := DefaultCardStyle()
+
+	// Verify default colors are set
+	if style.BorderColor == "" {
+		t.Error("BorderColor should have a default value")
+	}
+	if style.ProjectColor == "" {
+		t.Error("ProjectColor should have a default value")
+	}
+	if style.IDColor == "" {
+		t.Error("IDColor should have a default value")
+	}
+	if style.TitleColor == "" {
+		t.Error("TitleColor should have a default value")
+	}
+	if style.DescriptionColor == "" {
+		t.Error("DescriptionColor should have a default value")
+	}
+}
+
+func TestCard_Render_MinimumWidth(t *testing.T) {
+	card := NewCard("Project", model.UserStory{
+		ID:    "US-001",
+		Title: "Title",
+	})
+
+	// Should not panic with very small width
+	view := card.Render(5)
+
+	if view == "" {
+		t.Error("card should render even with minimum width")
 	}
 }

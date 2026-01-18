@@ -40,8 +40,18 @@
 - Lip Gloss styles: use `lipgloss.NewStyle()` for creating styles, chain methods
 - `lipgloss.JoinHorizontal()` and `lipgloss.JoinVertical()` for layout composition
 - Card component with box-drawing borders using `lipgloss.RoundedBorder()`
-- `truncate()` helper function for text that may exceed display width
+- `truncateString()` helper function for text that may exceed display width
 - Column colors: Red (203) for Incomplete, Yellow (220) for In Progress, Green (84) for Complete
+
+### Card Component Pattern
+- Separate `card.go` file for the Card component per AGENTS.md project structure
+- `Card` struct holds `ProjectName` and `Story` (model.UserStory)
+- `NewCard(projectName, story)` constructor for creating cards
+- `Card.Render(width)` method returns styled string output
+- `CardStyle` struct for customizable styling (border, project, ID, title, description colors)
+- `DefaultCardStyle()` provides sensible defaults
+- `RenderWithStyle(width, style)` for custom styling
+- Card layout: Project name at top, Story ID (prominent), Title (bold), Description (truncated)
 
 ---
 
@@ -157,4 +167,34 @@
   - `lipgloss.RoundedBorder()` for nice box-drawing borders
   - Column width calculation: `(terminalWidth - margins) / numColumns`
   - TUI testing focuses on data structures since View() output is hard to assert
+---
+
+## 2026-01-18 - PM-005
+- **What was implemented:** User story card display component with styled layout
+- **Files changed:**
+  - `internal/tui/card.go` - New dedicated Card component with Render methods
+  - `internal/tui/board.go` - Removed duplicate Card struct, uses NewCard constructor
+  - `internal/tui/column.go` - Uses Card.Render() instead of local renderCard function
+  - `internal/tui/tui_test.go` - Added 12 new tests for Card component
+- **Tests added:**
+  - TestNewCard - Tests card constructor
+  - TestCard_Render_ContainsProjectName - Verifies project name display
+  - TestCard_Render_ContainsStoryID - Verifies ID is prominently displayed
+  - TestCard_Render_ContainsTitle - Verifies title is displayed
+  - TestCard_Render_ContainsDescription - Verifies description is displayed
+  - TestCard_Render_TruncatesLongDescription - Tests description truncation
+  - TestCard_Render_EmptyDescription - Tests handling of empty description
+  - TestCard_Render_HasBorder - Verifies box-drawing characters are used
+  - TestCard_RenderWithStyle - Tests custom styling
+  - TestDefaultCardStyle - Verifies default style values
+  - TestCard_Render_MinimumWidth - Tests small width handling
+  - TestTruncateString - Tests string truncation helper (renamed from TestTruncate)
+- **Learnings:**
+  - Separate component files (card.go) follow AGENTS.md project structure
+  - Use constructor functions (NewCard) for cleaner API and easier testing
+  - CardStyle struct pattern allows customizable styling without changing component logic
+  - Render methods should handle edge cases (empty strings, minimum widths)
+  - When refactoring, check for duplicate struct definitions across files
+  - Use `strings.ContainsAny()` to check for any of multiple characters (e.g., border chars)
+  - lipgloss.Color type is just a string alias, works with string color codes
 ---

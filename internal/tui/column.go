@@ -79,14 +79,14 @@ func (c *Column) View() string {
 
 		content.WriteString(emptyStyle.Render("No items"))
 	} else {
-		// Render cards
+		// Render cards using the Card component
 		cardWidth := c.width - 6
 		if cardWidth < 15 {
 			cardWidth = 15
 		}
 
 		for i, card := range c.cards {
-			content.WriteString(renderCard(card, cardWidth))
+			content.WriteString(card.Render(cardWidth))
 			if i < len(c.cards)-1 {
 				content.WriteString("\n")
 			}
@@ -94,71 +94,4 @@ func (c *Column) View() string {
 	}
 
 	return containerStyle.Render(content.String())
-}
-
-// renderCard renders a single card with box-drawing borders.
-func renderCard(card *Card, width int) string {
-	// Card border style
-	cardStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Width(width).
-		Padding(0, 1)
-
-	// Project name style
-	projectStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
-		Bold(true)
-
-	// ID style
-	idStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("205")).
-		Bold(true)
-
-	// Title style
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		Bold(true)
-
-	// Description style
-	descStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("247"))
-
-	// Build card content
-	var content strings.Builder
-
-	// Project name
-	content.WriteString(projectStyle.Render(truncate(card.ProjectName, width-4)))
-	content.WriteString("\n")
-
-	// Story ID
-	content.WriteString(idStyle.Render(card.Story.ID))
-	content.WriteString("\n")
-
-	// Title
-	content.WriteString(titleStyle.Render(truncate(card.Story.Title, width-4)))
-	content.WriteString("\n")
-
-	// Description (truncated)
-	desc := truncate(card.Story.Description, width-4)
-	if len(card.Story.Description) > width-4 {
-		desc = desc + "..."
-	}
-	content.WriteString(descStyle.Render(desc))
-
-	return cardStyle.Render(content.String())
-}
-
-// truncate shortens a string to the given max length.
-func truncate(s string, maxLen int) string {
-	if maxLen <= 0 {
-		return ""
-	}
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }

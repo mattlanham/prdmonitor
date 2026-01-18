@@ -26,10 +26,7 @@ func NewBoard(parseResults []*parser.ParseResult) *Board {
 	for _, result := range parseResults {
 		projectName := result.PRD.Name
 		for _, story := range result.PRD.UserStories {
-			card := &Card{
-				ProjectName: projectName,
-				Story:       story,
-			}
+			card := NewCard(projectName, story)
 
 			switch story.Status {
 			case model.StatusInProgress:
@@ -84,10 +81,4 @@ func (b *Board) View() string {
 
 	// Join columns horizontally with a small gap
 	return lipgloss.JoinHorizontal(lipgloss.Top, views...)
-}
-
-// Card represents a user story card on the board.
-type Card struct {
-	ProjectName string
-	Story       model.UserStory
 }
