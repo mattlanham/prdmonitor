@@ -132,7 +132,7 @@
         "No orphaned cards remain after file deletion"
       ],
       "priority": 9,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-011",

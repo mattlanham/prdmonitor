@@ -8,6 +8,7 @@ import (
 
 	"lanham/prdmonitor/internal/model"
 	"lanham/prdmonitor/internal/parser"
+	"lanham/prdmonitor/internal/watcher"
 )
 
 func TestNewColumn(t *testing.T) {
@@ -748,5 +749,184 @@ func TestApp_Update_QuitStillWorks(t *testing.T) {
 	// Quit should return a command
 	if cmd == nil {
 		t.Error("'q' key should still trigger quit in read-only mode")
+	}
+}
+
+// File deletion handling tests for PM-010
+
+func TestApp_HandleFileChange_Delete(t *testing.T) {
+	// Set up with two projects
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Title: "Story 1", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project1/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Project2",
+				UserStories: []model.UserStory{
+					{ID: "P2-001", Title: "Story 2", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project2/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Verify initial state - 2 cards in Incomplete column
+	if len(app.board.columns[0].cards) != 2 {
+		t.Fatalf("Expected 2 cards initially, got %d", len(app.board.columns[0].cards))
+	}
+
+	// Simulate file deletion event
+	deleteMsg := FileChangedMsg{
+		FilePath: "/test/project1/prd.json",
+		Op:       watcher.OpDelete,
+	}
+
+	// Handle the deletion
+	app.handleFileChange(deleteMsg)
+
+	// Verify that cards from Project1 are removed
+	if len(app.board.columns[0].cards) != 1 {
+		t.Errorf("Expected 1 card after deletion, got %d", len(app.board.columns[0].cards))
+	}
+
+	// Verify the remaining card is from Project2
+	if app.board.columns[0].cards[0].ProjectName != "Project2" {
+		t.Errorf("Expected remaining card from Project2, got %s", app.board.columns[0].cards[0].ProjectName)
+	}
+}
+
+func TestApp_HandleFileChange_DeleteLastProject(t *testing.T) {
+	// Set up with one project
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Title: "Story 1", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project1/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Verify initial state
+	if len(app.board.columns[0].cards) != 1 {
+		t.Fatalf("Expected 1 card initially, got %d", len(app.board.columns[0].cards))
+	}
+
+	// Simulate file deletion event
+	deleteMsg := FileChangedMsg{
+		FilePath: "/test/project1/prd.json",
+		Op:       watcher.OpDelete,
+	}
+
+	// Handle the deletion
+	app.handleFileChange(deleteMsg)
+
+	// Verify all columns are empty after deleting the only project
+	for i, col := range app.board.columns {
+		if len(col.cards) != 0 {
+			t.Errorf("Column %d: expected 0 cards after deleting last project, got %d", i, len(col.cards))
+		}
+	}
+}
+
+func TestApp_HandleFileChange_DeleteNonExistent(t *testing.T) {
+	// Set up with one project
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Title: "Story 1", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project1/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Simulate deletion of a non-existent file
+	deleteMsg := FileChangedMsg{
+		FilePath: "/test/nonexistent/prd.json",
+		Op:       watcher.OpDelete,
+	}
+
+	// Handle the deletion - should not panic or affect existing cards
+	app.handleFileChange(deleteMsg)
+
+	// Verify existing card is still there
+	if len(app.board.columns[0].cards) != 1 {
+		t.Errorf("Expected 1 card to remain, got %d", len(app.board.columns[0].cards))
+	}
+}
+
+func TestApp_HandleFileChange_DeleteMultipleStories(t *testing.T) {
+	// Set up with one project with multiple stories in different columns
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Title: "Incomplete Story", Status: model.StatusIncomplete},
+					{ID: "P1-002", Title: "In Progress Story", Status: model.StatusInProgress},
+					{ID: "P1-003", Title: "Complete Story", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/project1/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Verify initial state - one card in each column
+	if len(app.board.columns[0].cards) != 1 {
+		t.Fatalf("Expected 1 card in Incomplete, got %d", len(app.board.columns[0].cards))
+	}
+	if len(app.board.columns[1].cards) != 1 {
+		t.Fatalf("Expected 1 card in In Progress, got %d", len(app.board.columns[1].cards))
+	}
+	if len(app.board.columns[2].cards) != 1 {
+		t.Fatalf("Expected 1 card in Complete, got %d", len(app.board.columns[2].cards))
+	}
+
+	// Simulate file deletion event
+	deleteMsg := FileChangedMsg{
+		FilePath: "/test/project1/prd.json",
+		Op:       watcher.OpDelete,
+	}
+
+	// Handle the deletion
+	app.handleFileChange(deleteMsg)
+
+	// Verify all cards from all columns are removed (no orphaned cards)
+	for i, col := range app.board.columns {
+		if len(col.cards) != 0 {
+			t.Errorf("Column %d: expected 0 cards after deletion, got %d - orphaned cards remain", i, len(col.cards))
+		}
 	}
 }

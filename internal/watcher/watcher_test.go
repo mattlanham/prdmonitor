@@ -571,3 +571,144 @@ func TestWatcher_DetectsNewPrdJsonInExistingSubdirectory(t *testing.T) {
 		t.Error("Timed out waiting for new file event in existing subdirectory")
 	}
 }
+
+// File deletion tests for PM-010
+
+func TestWatcher_DetectsFileDeletion(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	// Create a temp file
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "prd.json")
+	if err := os.WriteFile(tmpFile, []byte(`{"name": "test"}`), 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	// Get resolved path for comparison
+	absPath, _ := filepath.Abs(tmpFile)
+	resolvedPath, _ := filepath.EvalSymlinks(absPath)
+
+	// Add file to watcher
+	if err := w.AddFile(tmpFile); err != nil {
+		t.Fatalf("AddFile() returned error: %v", err)
+	}
+
+	// Start watcher
+	go w.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	// Delete the file
+	if err := os.Remove(tmpFile); err != nil {
+		t.Fatalf("Failed to delete temp file: %v", err)
+	}
+
+	// Wait for delete event
+	select {
+	case event := <-w.Events():
+		if event.FilePath != resolvedPath {
+			t.Errorf("Expected FilePath %q, got %q", resolvedPath, event.FilePath)
+		}
+		if event.Op != OpDelete {
+			t.Errorf("Expected OpDelete, got %v", event.Op)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("Timed out waiting for file deletion event")
+	}
+}
+
+func TestWatcher_RemovesDeletedFileFromTracking(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	// Create a temp file
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "prd.json")
+	if err := os.WriteFile(tmpFile, []byte(`{"name": "test"}`), 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	// Add file to watcher
+	if err := w.AddFile(tmpFile); err != nil {
+		t.Fatalf("AddFile() returned error: %v", err)
+	}
+
+	// Verify file is being tracked
+	if len(w.WatchedFiles()) != 1 {
+		t.Fatalf("Expected 1 watched file, got %d", len(w.WatchedFiles()))
+	}
+
+	// Start watcher
+	go w.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	// Delete the file
+	if err := os.Remove(tmpFile); err != nil {
+		t.Fatalf("Failed to delete temp file: %v", err)
+	}
+
+	// Wait for delete event
+	select {
+	case event := <-w.Events():
+		if event.Op != OpDelete {
+			t.Errorf("Expected OpDelete, got %v", event.Op)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for file deletion event")
+	}
+
+	// Allow time for cleanup
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify file was removed from tracking
+	watchedFiles := w.WatchedFiles()
+	if len(watchedFiles) != 0 {
+		t.Errorf("Expected 0 watched files after deletion, got %d: %v", len(watchedFiles), watchedFiles)
+	}
+}
+
+func TestWatcher_DetectsFileRenameAsDelete(t *testing.T) {
+	w, err := New()
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+	defer w.Stop()
+
+	// Create a temp file
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "prd.json")
+	if err := os.WriteFile(tmpFile, []byte(`{"name": "test"}`), 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	// Add file to watcher
+	if err := w.AddFile(tmpFile); err != nil {
+		t.Fatalf("AddFile() returned error: %v", err)
+	}
+
+	// Start watcher
+	go w.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	// Rename the file (simulates file being moved away)
+	renamedFile := filepath.Join(tmpDir, "prd.json.bak")
+	if err := os.Rename(tmpFile, renamedFile); err != nil {
+		t.Fatalf("Failed to rename temp file: %v", err)
+	}
+
+	// Wait for delete event (rename is treated as delete for watched files)
+	select {
+	case event := <-w.Events():
+		if event.Op != OpDelete {
+			t.Errorf("Expected OpDelete for rename, got %v", event.Op)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("Timed out waiting for rename/delete event")
+	}
+}

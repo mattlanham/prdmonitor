@@ -330,3 +330,24 @@
   - The footer/status bar should have both the mode indicator AND helpful guidance for users
   - Returning `nil` cmd from Update() is proper way to indicate "no action" for ignored keys
 ---
+
+## 2026-01-18 - PM-010
+- **What was implemented:** File deletion handling - detects when prd.json files are deleted, removes them from tracking, and removes associated cards from the board
+- **Files changed:**
+  - `internal/watcher/watcher.go` - Added cleanup logic to remove deleted files from tracking map after OpDelete events
+  - `internal/watcher/watcher_test.go` - Added 3 new tests for file deletion detection and cleanup
+  - `internal/tui/tui_test.go` - Added 4 new tests for TUI handling of file deletion events
+- **Tests added:**
+  - TestWatcher_DetectsFileDeletion - Tests that deleted files emit OpDelete events
+  - TestWatcher_RemovesDeletedFileFromTracking - Tests that deleted files are removed from watcher's file map
+  - TestWatcher_DetectsFileRenameAsDelete - Tests that file renames are treated as deletions
+  - TestApp_HandleFileChange_Delete - Tests removal of project cards when file is deleted
+  - TestApp_HandleFileChange_DeleteLastProject - Tests deletion of the only project leaves empty board
+  - TestApp_HandleFileChange_DeleteNonExistent - Tests deleting non-existent file doesn't affect board
+  - TestApp_HandleFileChange_DeleteMultipleStories - Tests all cards removed, no orphans remain
+- **Learnings:**
+  - fsnotify handles both Remove and Rename as deletion events for watched files
+  - When a file is deleted, must clean up the watcher's internal tracking map to prevent stale references
+  - File deletion handling was mostly already implemented in PM-007/PM-008 - this story focused on cleanup and comprehensive testing
+  - Test cases for deletion should cover: single project removal, last project removal, non-existent file deletion, and multi-story projects
+---

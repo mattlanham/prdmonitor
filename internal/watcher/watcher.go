@@ -293,6 +293,13 @@ func (w *Watcher) Start() {
 			lastEvent[absPath] = now
 			lastEventMu.Unlock()
 
+			// For delete operations, remove the file from tracking
+			if op == OpDelete {
+				w.mu.Lock()
+				delete(w.files, absPath)
+				w.mu.Unlock()
+			}
+
 			// Send the event
 			select {
 			case w.events <- Event{FilePath: absPath, Op: op}:
