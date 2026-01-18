@@ -17,8 +17,17 @@ type Board struct {
 	selectedCard int // Currently selected card index within the column
 }
 
-// NewBoard creates a new Board from the parsed PRD results.
+// AllProjectsFilter is imported from filter.go - use this constant value for "no filter"
+const allProjectsFilterValue = "All Projects"
+
+// NewBoard creates a new Board from the parsed PRD results with no filter.
 func NewBoard(parseResults []*parser.ParseResult) *Board {
+	return NewBoardWithFilter(parseResults, allProjectsFilterValue)
+}
+
+// NewBoardWithFilter creates a new Board from the parsed PRD results with an optional project filter.
+// If projectFilter is empty or "All Projects", all projects are shown.
+func NewBoardWithFilter(parseResults []*parser.ParseResult, projectFilter string) *Board {
 	// Create the three columns
 	incompleteCol := NewColumn("Incomplete", lipgloss.Color("203"))  // Red-ish
 	inProgressCol := NewColumn("In Progress", lipgloss.Color("220")) // Yellow
@@ -27,6 +36,12 @@ func NewBoard(parseResults []*parser.ParseResult) *Board {
 	// Distribute user stories to appropriate columns
 	for _, result := range parseResults {
 		projectName := result.PRD.Name
+
+		// Skip projects that don't match the filter
+		if projectFilter != "" && projectFilter != allProjectsFilterValue && projectName != projectFilter {
+			continue
+		}
+
 		for _, story := range result.PRD.UserStories {
 			card := NewCard(projectName, story)
 

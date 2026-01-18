@@ -49,28 +49,57 @@ type FileChangedMsg struct {
 
 // App is the main Bubble Tea model for the PRDMonitor application.
 type App struct {
-	board        *Board
-	width        int
-	height       int
-	watcher      *watcher.Watcher
-	parseResults []*parser.ParseResult
-	rootDir      string
-	showHelp     bool         // Whether to show the help overlay
-	expandedCard *Card        // Currently expanded card (nil if none)
-	helpOverlay  *HelpOverlay // Help overlay component
+	board         *Board
+	width         int
+	height        int
+	watcher       *watcher.Watcher
+	parseResults  []*parser.ParseResult
+	rootDir       string
+	showHelp      bool           // Whether to show the help overlay
+	expandedCard  *Card          // Currently expanded card (nil if none)
+	helpOverlay   *HelpOverlay   // Help overlay component
+	showFilter    bool           // Whether to show the filter overlay
+	filterOverlay *FilterOverlay // Filter overlay component
+	projectFilter string         // Current project filter (empty or "All Projects" means no filter)
 }
 
 // NewApp creates a new App model with the given parsed PRD results.
 func NewApp(parseResults []*parser.ParseResult, w *watcher.Watcher, rootDir string) *App {
+	// Extract unique project names
+	projectNames := extractProjectNames(parseResults)
+
 	return &App{
-		board:        NewBoard(parseResults),
-		watcher:      w,
-		parseResults: parseResults,
-		rootDir:      rootDir,
-		showHelp:     false,
-		expandedCard: nil,
-		helpOverlay:  NewHelpOverlay(),
+		board:         NewBoard(parseResults),
+		watcher:       w,
+		parseResults:  parseResults,
+		rootDir:       rootDir,
+		showHelp:      false,
+		expandedCard:  nil,
+		helpOverlay:   NewHelpOverlay(),
+		showFilter:    false,
+		filterOverlay: NewFilterOverlay(projectNames),
+		projectFilter: AllProjectsFilter, // Start with all projects
 	}
+}
+
+// extractProjectNames extracts unique project names from parse results.
+func extractProjectNames(parseResults []*parser.ParseResult) []string {
+	seen := make(map[string]bool)
+	var names []string
+	for _, result := range parseResults {
+		name := result.PRD.Name
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// rebuildBoard rebuilds the board with the current filter applied.
+func (a *App) rebuildBoard() {
+	a.board = NewBoardWithFilter(a.parseResults, a.projectFilter)
+	a.board.SetSize(a.width, a.height)
 }
 
 // Init implements tea.Model.
@@ -121,6 +150,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.expandedCard = nil
 				return a, nil
 			}
+			if a.showFilter {
+				a.showFilter = false
+				return a, nil
+			}
 			if a.showHelp {
 				a.showHelp = false
 				return a, nil
@@ -131,15 +164,63 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle help overlay toggle
 		if msg.String() == "?" {
 			if a.expandedCard != nil {
-				// Close expanded card first
 				a.expandedCard = nil
+			}
+			if a.showFilter {
+				a.showFilter = false
 			}
 			a.showHelp = !a.showHelp
 			return a, nil
 		}
 
+		// Handle filter overlay toggle
+		if msg.String() == "f" {
+			// Close other overlays first
+			if a.expandedCard != nil {
+				a.expandedCard = nil
+			}
+			if a.showHelp {
+				a.showHelp = false
+			}
+			a.showFilter = !a.showFilter
+			return a, nil
+		}
+
 		// If help is showing, only allow closing it
 		if a.showHelp {
+			return a, nil
+		}
+
+		// If filter is showing, handle filter navigation
+		if a.showFilter {
+			switch msg.Type {
+			case tea.KeyEnter:
+				// Select the current project and close filter
+				a.projectFilter = a.filterOverlay.SelectedProject()
+				a.showFilter = false
+				a.rebuildBoard()
+				return a, nil
+			case tea.KeyUp:
+				a.filterOverlay.MoveUp()
+				return a, nil
+			case tea.KeyDown:
+				a.filterOverlay.MoveDown()
+				return a, nil
+			}
+			switch msg.String() {
+			case "k":
+				a.filterOverlay.MoveUp()
+				return a, nil
+			case "j":
+				a.filterOverlay.MoveDown()
+				return a, nil
+			case " ":
+				// Select the current project and close filter
+				a.projectFilter = a.filterOverlay.SelectedProject()
+				a.showFilter = false
+				a.rebuildBoard()
+				return a, nil
+			}
 			return a, nil
 		}
 
@@ -201,6 +282,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.height = msg.Height
 		a.board.SetSize(msg.Width, msg.Height)
 		a.helpOverlay.SetSize(msg.Width, msg.Height)
+		a.filterOverlay.SetSize(msg.Width, msg.Height)
 
 	case tea.MouseMsg:
 		// Handle mouse wheel scrolling
@@ -272,9 +354,11 @@ func (a *App) handleFileChange(msg FileChangedMsg) {
 			a.parseResults = append(a.parseResults, result)
 		}
 
-		// Rebuild the board with updated data
-		a.board = NewBoard(a.parseResults)
-		a.board.SetSize(a.width, a.height)
+		// Update project list in filter overlay
+		a.filterOverlay.UpdateProjects(extractProjectNames(a.parseResults))
+
+		// Rebuild the board with current filter
+		a.rebuildBoard()
 
 	case watcher.OpDelete:
 		// Remove the deleted file from parse results
@@ -285,9 +369,28 @@ func (a *App) handleFileChange(msg FileChangedMsg) {
 			}
 		}
 
-		// Rebuild the board
-		a.board = NewBoard(a.parseResults)
-		a.board.SetSize(a.width, a.height)
+		// Update project list in filter overlay
+		a.filterOverlay.UpdateProjects(extractProjectNames(a.parseResults))
+
+		// If the filtered project was deleted, reset to all projects
+		projectStillExists := false
+		if a.projectFilter == AllProjectsFilter {
+			projectStillExists = true
+		} else {
+			for _, result := range a.parseResults {
+				if result.PRD.Name == a.projectFilter {
+					projectStillExists = true
+					break
+				}
+			}
+		}
+		if !projectStillExists {
+			a.projectFilter = AllProjectsFilter
+			a.filterOverlay.SelectProject(AllProjectsFilter)
+		}
+
+		// Rebuild the board with current filter
+		a.rebuildBoard()
 	}
 }
 
@@ -308,7 +411,13 @@ func (a *App) View() string {
 		Foreground(lipgloss.Color("241")).
 		MarginTop(1)
 
-	statusBar := statusBarStyle.Render(ReadOnlyMessage + " | ↑↓←→/hjkl: navigate | Enter: expand | ?: help | q: quit")
+	// Show current filter in status bar
+	filterDisplay := ""
+	if a.projectFilter != "" && a.projectFilter != AllProjectsFilter {
+		filterDisplay = " | Filter: " + a.projectFilter
+	}
+
+	statusBar := statusBarStyle.Render(ReadOnlyMessage + filterDisplay + " | ↑↓←→/hjkl: navigate | Enter: expand | f: filter | ?: help | q: quit")
 
 	// Help message for editing
 	helpMsgStyle := lipgloss.NewStyle().
@@ -333,6 +442,11 @@ func (a *App) View() string {
 	// Overlay help if showing
 	if a.showHelp {
 		return a.renderWithOverlay(baseView, a.helpOverlay.View())
+	}
+
+	// Overlay filter if showing
+	if a.showFilter {
+		return a.renderWithOverlay(baseView, a.filterOverlay.View())
 	}
 
 	// Overlay expanded card if showing

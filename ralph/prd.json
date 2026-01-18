@@ -264,7 +264,7 @@
         "Filter persists during the session but resets on restart"
       ],
       "priority": 19,
-      "status": "incomplete"
+      "status": "in-progress"
     },
     {
       "id": "PM-018",

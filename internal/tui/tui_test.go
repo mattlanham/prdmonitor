@@ -3528,3 +3528,857 @@ func TestApp_View_BalancedLayout(t *testing.T) {
 	// All column titles should appear on the same horizontal level (balanced layout)
 	// This is verified by the fact that columns are joined horizontally
 }
+
+// Filter by project tests for PM-017
+
+func TestNewFilterOverlay(t *testing.T) {
+	projectNames := []string{"Project1", "Project2", "Project3"}
+	f := NewFilterOverlay(projectNames)
+
+	if f == nil {
+		t.Fatal("NewFilterOverlay should not return nil")
+	}
+
+	// Should have "All Projects" plus the 3 provided projects
+	if len(f.projects) != 4 {
+		t.Errorf("expected 4 projects (including All Projects), got %d", len(f.projects))
+	}
+
+	// First item should be "All Projects"
+	if f.projects[0] != AllProjectsFilter {
+		t.Errorf("first project should be %q, got %q", AllProjectsFilter, f.projects[0])
+	}
+
+	// Initial selection should be 0 (All Projects)
+	if f.selectedIndex != 0 {
+		t.Errorf("initial selection should be 0, got %d", f.selectedIndex)
+	}
+}
+
+func TestFilterOverlay_MoveUpDown(t *testing.T) {
+	projectNames := []string{"Project1", "Project2"}
+	f := NewFilterOverlay(projectNames)
+
+	// Initial selection is 0
+	if f.SelectedIndex() != 0 {
+		t.Errorf("expected index 0, got %d", f.SelectedIndex())
+	}
+
+	// Move down
+	f.MoveDown()
+	if f.SelectedIndex() != 1 {
+		t.Errorf("expected index 1 after MoveDown, got %d", f.SelectedIndex())
+	}
+
+	f.MoveDown()
+	if f.SelectedIndex() != 2 {
+		t.Errorf("expected index 2 after MoveDown, got %d", f.SelectedIndex())
+	}
+
+	// Move down past the end (should stay at 2)
+	f.MoveDown()
+	if f.SelectedIndex() != 2 {
+		t.Errorf("expected index 2 (clamped), got %d", f.SelectedIndex())
+	}
+
+	// Move up
+	f.MoveUp()
+	if f.SelectedIndex() != 1 {
+		t.Errorf("expected index 1 after MoveUp, got %d", f.SelectedIndex())
+	}
+
+	f.MoveUp()
+	if f.SelectedIndex() != 0 {
+		t.Errorf("expected index 0 after MoveUp, got %d", f.SelectedIndex())
+	}
+
+	// Move up past the beginning (should stay at 0)
+	f.MoveUp()
+	if f.SelectedIndex() != 0 {
+		t.Errorf("expected index 0 (clamped), got %d", f.SelectedIndex())
+	}
+}
+
+func TestFilterOverlay_SelectedProject(t *testing.T) {
+	projectNames := []string{"Frontend", "Backend"}
+	f := NewFilterOverlay(projectNames)
+
+	// Initial selection is "All Projects"
+	if f.SelectedProject() != AllProjectsFilter {
+		t.Errorf("expected %q, got %q", AllProjectsFilter, f.SelectedProject())
+	}
+
+	// Move to "Frontend"
+	f.MoveDown()
+	if f.SelectedProject() != "Frontend" {
+		t.Errorf("expected 'Frontend', got %q", f.SelectedProject())
+	}
+
+	// Move to "Backend"
+	f.MoveDown()
+	if f.SelectedProject() != "Backend" {
+		t.Errorf("expected 'Backend', got %q", f.SelectedProject())
+	}
+}
+
+func TestFilterOverlay_SelectProject(t *testing.T) {
+	projectNames := []string{"Project1", "Project2", "Project3"}
+	f := NewFilterOverlay(projectNames)
+
+	// Select a specific project
+	found := f.SelectProject("Project2")
+	if !found {
+		t.Error("SelectProject should return true for existing project")
+	}
+	if f.SelectedProject() != "Project2" {
+		t.Errorf("expected 'Project2', got %q", f.SelectedProject())
+	}
+
+	// Select non-existent project
+	found = f.SelectProject("NonExistent")
+	if found {
+		t.Error("SelectProject should return false for non-existent project")
+	}
+
+	// Select "All Projects"
+	found = f.SelectProject(AllProjectsFilter)
+	if !found {
+		t.Error("SelectProject should find 'All Projects'")
+	}
+	if f.SelectedProject() != AllProjectsFilter {
+		t.Errorf("expected %q, got %q", AllProjectsFilter, f.SelectedProject())
+	}
+}
+
+func TestFilterOverlay_UpdateProjects(t *testing.T) {
+	// Start with some projects
+	f := NewFilterOverlay([]string{"Project1", "Project2"})
+
+	// Select Project2
+	f.SelectProject("Project2")
+	if f.SelectedProject() != "Project2" {
+		t.Fatal("setup: should have Project2 selected")
+	}
+
+	// Update with new projects that include the current selection
+	f.UpdateProjects([]string{"Project2", "Project3", "Project4"})
+
+	// Should preserve selection since Project2 still exists
+	if f.SelectedProject() != "Project2" {
+		t.Errorf("expected selection to be preserved as 'Project2', got %q", f.SelectedProject())
+	}
+
+	// Update with projects that don't include current selection
+	f.UpdateProjects([]string{"NewProject1", "NewProject2"})
+
+	// Should reset to "All Projects" since Project2 no longer exists
+	if f.SelectedProject() != AllProjectsFilter {
+		t.Errorf("expected selection to reset to %q, got %q", AllProjectsFilter, f.SelectedProject())
+	}
+}
+
+func TestFilterOverlay_SetSize(t *testing.T) {
+	f := NewFilterOverlay([]string{})
+	f.SetSize(100, 50)
+
+	if f.width != 100 {
+		t.Errorf("expected width 100, got %d", f.width)
+	}
+	if f.height != 50 {
+		t.Errorf("expected height 50, got %d", f.height)
+	}
+}
+
+func TestFilterOverlay_View(t *testing.T) {
+	projectNames := []string{"Frontend", "Backend"}
+	f := NewFilterOverlay(projectNames)
+	f.SetSize(100, 50)
+
+	view := f.View()
+
+	// Should contain title
+	if !strings.Contains(view, "Filter by Project") {
+		t.Error("filter view should contain title")
+	}
+
+	// Should contain "All Projects"
+	if !strings.Contains(view, AllProjectsFilter) {
+		t.Error("filter view should contain 'All Projects' option")
+	}
+
+	// Should contain project names
+	if !strings.Contains(view, "Frontend") {
+		t.Error("filter view should contain project names")
+	}
+	if !strings.Contains(view, "Backend") {
+		t.Error("filter view should contain project names")
+	}
+
+	// Should contain close hint
+	if !strings.Contains(view, "Esc") {
+		t.Error("filter view should mention how to close")
+	}
+}
+
+func TestApp_ProjectFilter_InitialState(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/project1/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Initially filter should be "All Projects"
+	if app.projectFilter != AllProjectsFilter {
+		t.Errorf("expected initial filter to be %q, got %q", AllProjectsFilter, app.projectFilter)
+	}
+
+	// Filter overlay should be initialized
+	if app.filterOverlay == nil {
+		t.Error("filterOverlay should be initialized")
+	}
+
+	// Filter should not be shown initially
+	if app.showFilter {
+		t.Error("showFilter should be false initially")
+	}
+}
+
+func TestApp_Update_FKeyTogglesFilter(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Initially filter is not shown
+	if app.showFilter {
+		t.Error("showFilter should be false initially")
+	}
+
+	// Press 'f' to show filter
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if !app.showFilter {
+		t.Error("showFilter should be true after pressing 'f'")
+	}
+
+	// Press 'f' again to hide filter
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	if app.showFilter {
+		t.Error("showFilter should be false after pressing 'f' again")
+	}
+}
+
+func TestApp_Update_EscClosesFilter(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+
+	// Show filter
+	app.showFilter = true
+
+	// Press Esc to close
+	msg := tea.KeyMsg{Type: tea.KeyEsc}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if app.showFilter {
+		t.Error("showFilter should be false after Esc")
+	}
+}
+
+func TestApp_Update_FilterNavigationArrowKeys(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD:      &model.PRD{Name: "Project1", UserStories: []model.UserStory{}},
+			FilePath: "/test/p1/prd.json",
+		},
+		{
+			PRD:      &model.PRD{Name: "Project2", UserStories: []model.UserStory{}},
+			FilePath: "/test/p2/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.showFilter = true
+
+	// Initial index is 0 (All Projects)
+	if app.filterOverlay.SelectedIndex() != 0 {
+		t.Errorf("expected initial index 0, got %d", app.filterOverlay.SelectedIndex())
+	}
+
+	// Press down arrow
+	msg := tea.KeyMsg{Type: tea.KeyDown}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if app.filterOverlay.SelectedIndex() != 1 {
+		t.Errorf("expected index 1 after down, got %d", app.filterOverlay.SelectedIndex())
+	}
+
+	// Press up arrow
+	msg = tea.KeyMsg{Type: tea.KeyUp}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	if app.filterOverlay.SelectedIndex() != 0 {
+		t.Errorf("expected index 0 after up, got %d", app.filterOverlay.SelectedIndex())
+	}
+}
+
+func TestApp_Update_FilterNavigationJK(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD:      &model.PRD{Name: "Project1", UserStories: []model.UserStory{}},
+			FilePath: "/test/p1/prd.json",
+		},
+		{
+			PRD:      &model.PRD{Name: "Project2", UserStories: []model.UserStory{}},
+			FilePath: "/test/p2/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.showFilter = true
+
+	// Press 'j' (down)
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	if app.filterOverlay.SelectedIndex() != 1 {
+		t.Errorf("expected index 1 after 'j', got %d", app.filterOverlay.SelectedIndex())
+	}
+
+	// Press 'k' (up)
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
+	newModel, _ = app.Update(msg)
+	app = newModel.(*App)
+
+	if app.filterOverlay.SelectedIndex() != 0 {
+		t.Errorf("expected index 0 after 'k', got %d", app.filterOverlay.SelectedIndex())
+	}
+}
+
+func TestApp_Update_FilterEnterSelectsProject(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/p1/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Project2",
+				UserStories: []model.UserStory{
+					{ID: "P2-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/p2/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	app.showFilter = true
+
+	// Initially at "All Projects", both cards should be visible
+	if len(app.board.columns[0].cards) != 2 {
+		t.Fatalf("expected 2 cards initially, got %d", len(app.board.columns[0].cards))
+	}
+
+	// Navigate to "Project1" (index 1)
+	app.filterOverlay.MoveDown()
+	if app.filterOverlay.SelectedProject() != "Project1" {
+		t.Fatalf("expected 'Project1' selected, got %q", app.filterOverlay.SelectedProject())
+	}
+
+	// Press Enter to select
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Filter should be closed
+	if app.showFilter {
+		t.Error("showFilter should be false after Enter")
+	}
+
+	// Project filter should be set
+	if app.projectFilter != "Project1" {
+		t.Errorf("expected projectFilter 'Project1', got %q", app.projectFilter)
+	}
+
+	// Board should only show cards from Project1
+	if len(app.board.columns[0].cards) != 1 {
+		t.Errorf("expected 1 card after filter, got %d", len(app.board.columns[0].cards))
+	}
+	if app.board.columns[0].cards[0].ProjectName != "Project1" {
+		t.Errorf("expected card from Project1, got %q", app.board.columns[0].cards[0].ProjectName)
+	}
+}
+
+func TestApp_Update_FilterSpaceSelectsProject(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "ProjectA",
+				UserStories: []model.UserStory{
+					{ID: "A-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/a/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	app.showFilter = true
+
+	// Navigate to "ProjectA"
+	app.filterOverlay.MoveDown()
+
+	// Press Space to select
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Filter should be closed
+	if app.showFilter {
+		t.Error("showFilter should be false after Space")
+	}
+
+	// Project filter should be set
+	if app.projectFilter != "ProjectA" {
+		t.Errorf("expected projectFilter 'ProjectA', got %q", app.projectFilter)
+	}
+}
+
+func TestApp_View_ShowsFilterOverlay(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD:      &model.PRD{Name: "TestProject", UserStories: []model.UserStory{}},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+	app.filterOverlay.SetSize(100, 40)
+	app.showFilter = true
+
+	view := app.View()
+
+	// Should show filter overlay
+	if !strings.Contains(view, "Filter by Project") {
+		t.Error("view should show filter overlay when showFilter is true")
+	}
+}
+
+func TestApp_View_ShowsCurrentFilterInStatusBar(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "MyProject",
+				UserStories: []model.UserStory{},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// When filter is "All Projects", it should not be shown
+	view := app.View()
+	if strings.Contains(view, "Filter:") && strings.Contains(view, AllProjectsFilter) {
+		t.Error("status bar should not explicitly show 'All Projects' filter")
+	}
+
+	// Set a specific project filter
+	app.projectFilter = "MyProject"
+	app.rebuildBoard()
+
+	view = app.View()
+	if !strings.Contains(view, "MyProject") {
+		t.Error("status bar should show current project filter")
+	}
+}
+
+func TestNewBoardWithFilter_FiltersCards(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Frontend",
+				UserStories: []model.UserStory{
+					{ID: "FE-001", Status: model.StatusIncomplete},
+					{ID: "FE-002", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/frontend/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Backend",
+				UserStories: []model.UserStory{
+					{ID: "BE-001", Status: model.StatusIncomplete},
+					{ID: "BE-002", Status: model.StatusComplete},
+				},
+			},
+			FilePath: "/test/backend/prd.json",
+		},
+	}
+
+	// Filter for "Frontend" only
+	board := NewBoardWithFilter(parseResults, "Frontend")
+
+	// Should only have Frontend cards
+	totalCards := len(board.columns[0].cards) + len(board.columns[1].cards) + len(board.columns[2].cards)
+	if totalCards != 2 {
+		t.Errorf("expected 2 cards for Frontend filter, got %d", totalCards)
+	}
+
+	// Verify all cards are from Frontend
+	for _, col := range board.columns {
+		for _, card := range col.cards {
+			if card.ProjectName != "Frontend" {
+				t.Errorf("expected card from Frontend, got %q", card.ProjectName)
+			}
+		}
+	}
+}
+
+func TestNewBoardWithFilter_AllProjectsShowsAll(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "Project1",
+				UserStories: []model.UserStory{{ID: "P1-001", Status: model.StatusIncomplete}},
+			},
+			FilePath: "/test/p1/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name:        "Project2",
+				UserStories: []model.UserStory{{ID: "P2-001", Status: model.StatusIncomplete}},
+			},
+			FilePath: "/test/p2/prd.json",
+		},
+	}
+
+	// Filter with "All Projects" should show all
+	board := NewBoardWithFilter(parseResults, AllProjectsFilter)
+
+	if len(board.columns[0].cards) != 2 {
+		t.Errorf("expected 2 cards with All Projects filter, got %d", len(board.columns[0].cards))
+	}
+
+	// Empty filter should also show all
+	board = NewBoardWithFilter(parseResults, "")
+
+	if len(board.columns[0].cards) != 2 {
+		t.Errorf("expected 2 cards with empty filter, got %d", len(board.columns[0].cards))
+	}
+}
+
+func TestApp_FilterBlocksNavigation(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Status: model.StatusIncomplete},
+					{ID: "P1-002", Status: model.StatusInProgress},
+				},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.showFilter = true
+
+	initialCol := app.board.SelectedColumn()
+
+	// Try to navigate board while filter is showing (with 'l' which normally moves right)
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Board navigation should be blocked
+	if app.board.SelectedColumn() != initialCol {
+		t.Error("board navigation should be blocked while filter is showing")
+	}
+}
+
+func TestApp_FilterClosesOtherOverlays(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "Project1",
+				UserStories: []model.UserStory{{ID: "P1-001", Status: model.StatusIncomplete}},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Show help first
+	app.showHelp = true
+
+	// Press 'f' to show filter
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Help should be closed
+	if app.showHelp {
+		t.Error("showHelp should be closed when opening filter")
+	}
+
+	// Filter should be shown
+	if !app.showFilter {
+		t.Error("showFilter should be true")
+	}
+}
+
+func TestApp_FilterClosesExpandedCard(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name:        "Project1",
+				UserStories: []model.UserStory{{ID: "P1-001", Status: model.StatusIncomplete}},
+			},
+			FilePath: "/test/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+
+	// Expand a card first
+	app.expandedCard = app.board.SelectedCard()
+
+	// Press 'f' to show filter
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")}
+	newModel, _ := app.Update(msg)
+	app = newModel.(*App)
+
+	// Expanded card should be closed
+	if app.expandedCard != nil {
+		t.Error("expandedCard should be closed when opening filter")
+	}
+
+	// Filter should be shown
+	if !app.showFilter {
+		t.Error("showFilter should be true")
+	}
+}
+
+func TestExtractProjectNames(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{PRD: &model.PRD{Name: "Project1"}, FilePath: "/p1"},
+		{PRD: &model.PRD{Name: "Project2"}, FilePath: "/p2"},
+		{PRD: &model.PRD{Name: "Project1"}, FilePath: "/p1-dup"}, // Duplicate name
+		{PRD: &model.PRD{Name: ""}, FilePath: "/empty"},          // Empty name
+	}
+
+	names := extractProjectNames(parseResults)
+
+	// Should have 2 unique non-empty names
+	if len(names) != 2 {
+		t.Errorf("expected 2 unique names, got %d: %v", len(names), names)
+	}
+
+	// Should contain Project1 and Project2
+	foundP1, foundP2 := false, false
+	for _, name := range names {
+		if name == "Project1" {
+			foundP1 = true
+		}
+		if name == "Project2" {
+			foundP2 = true
+		}
+	}
+
+	if !foundP1 || !foundP2 {
+		t.Errorf("expected Project1 and Project2, got %v", names)
+	}
+}
+
+func TestApp_HandleFileChange_UpdatesFilterOverlay(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD:      &model.PRD{Name: "OldProject", UserStories: []model.UserStory{}},
+			FilePath: "/test/old/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Initially should have OldProject
+	if len(app.filterOverlay.Projects()) != 2 { // All Projects + OldProject
+		t.Fatalf("expected 2 projects initially, got %d", len(app.filterOverlay.Projects()))
+	}
+
+	// Simulate adding a new project
+	newResult := &parser.ParseResult{
+		PRD:      &model.PRD{Name: "NewProject", UserStories: []model.UserStory{}},
+		FilePath: "/test/new/prd.json",
+	}
+
+	// Simulate the Create operation manually
+	app.parseResults = append(app.parseResults, newResult)
+	app.filterOverlay.UpdateProjects(extractProjectNames(app.parseResults))
+
+	// Filter overlay should now have 3 projects
+	if len(app.filterOverlay.Projects()) != 3 { // All Projects + OldProject + NewProject
+		t.Errorf("expected 3 projects after add, got %d: %v", len(app.filterOverlay.Projects()), app.filterOverlay.Projects())
+	}
+}
+
+func TestApp_HandleFileChange_DeletedProjectResetsFilter(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/p1/prd.json",
+		},
+		{
+			PRD: &model.PRD{
+				Name: "Project2",
+				UserStories: []model.UserStory{
+					{ID: "P2-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/p2/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Set filter to Project1
+	app.projectFilter = "Project1"
+	app.rebuildBoard()
+
+	// Simulate deletion of Project1
+	deleteMsg := FileChangedMsg{
+		FilePath: "/test/p1/prd.json",
+		Op:       watcher.OpDelete,
+	}
+	app.handleFileChange(deleteMsg)
+
+	// Filter should reset to "All Projects" since Project1 no longer exists
+	if app.projectFilter != AllProjectsFilter {
+		t.Errorf("expected filter to reset to %q, got %q", AllProjectsFilter, app.projectFilter)
+	}
+}
+
+func TestHelpShortcuts_ContainsFilterKey(t *testing.T) {
+	found := false
+	for _, shortcut := range HelpShortcuts {
+		if strings.Contains(shortcut.Key, "f") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("HelpShortcuts should contain 'f' for filter")
+	}
+}
+
+func TestApp_View_StatusBarShowsFilterShortcut(t *testing.T) {
+	app := NewApp([]*parser.ParseResult{}, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	view := app.View()
+
+	// Status bar should show 'f: filter' hint
+	if !strings.Contains(view, "f:") || !strings.Contains(view, "filter") {
+		t.Error("status bar should show filter shortcut hint")
+	}
+}
+
+func TestFilterOverlay_View_EmptyProjects(t *testing.T) {
+	// Even with no projects, should still have "All Projects"
+	f := NewFilterOverlay([]string{})
+	f.SetSize(100, 50)
+
+	view := f.View()
+
+	if !strings.Contains(view, AllProjectsFilter) {
+		t.Error("filter view should always contain 'All Projects'")
+	}
+}
+
+func TestApp_FilterPersistsDuringSession(t *testing.T) {
+	parseResults := []*parser.ParseResult{
+		{
+			PRD: &model.PRD{
+				Name: "Project1",
+				UserStories: []model.UserStory{
+					{ID: "P1-001", Status: model.StatusIncomplete},
+				},
+			},
+			FilePath: "/test/p1/prd.json",
+		},
+	}
+
+	app := NewApp(parseResults, nil, "")
+	app.width = 100
+	app.height = 40
+	app.board.SetSize(100, 40)
+
+	// Set filter to Project1
+	app.projectFilter = "Project1"
+	app.filterOverlay.SelectProject("Project1")
+	app.rebuildBoard()
+
+	// Simulate some navigation
+	msg := tea.KeyMsg{Type: tea.KeyDown}
+	app.Update(msg)
+
+	// Filter should still be set
+	if app.projectFilter != "Project1" {
+		t.Errorf("filter should persist during session, got %q", app.projectFilter)
+	}
+
+	// Simulate window resize
+	msg2 := tea.WindowSizeMsg{Width: 120, Height: 50}
+	newModel, _ := app.Update(msg2)
+	app = newModel.(*App)
+
+	// Filter should still be set after resize
+	if app.projectFilter != "Project1" {
+		t.Errorf("filter should persist after resize, got %q", app.projectFilter)
+	}
+}

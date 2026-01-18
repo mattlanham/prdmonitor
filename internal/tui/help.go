@@ -35,7 +35,8 @@ var HelpShortcuts = []struct {
 	{"→/l", "Move to right column"},
 	{"Tab", "Cycle between columns"},
 	{"Enter/Space", "Expand card details"},
-	{"Esc", "Close expanded card/help"},
+	{"f", "Filter by project"},
+	{"Esc", "Close overlay/filter"},
 	{"?", "Toggle this help"},
 	{"q/Ctrl+C", "Quit application"},
 }
