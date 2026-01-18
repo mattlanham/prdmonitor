@@ -175,13 +175,18 @@ prdmonitor/
 │       └── help.go      # Help overlay
 ├── go.mod
 ├── go.sum
-└── example/             # Sample projects to try out
-    ├── weather-app/
-    │   └── prd.json
-    ├── task-tracker/
-    │   └── prd.json
-    └── recipe-finder/
-        └── prd.json
+├── example/             # Sample projects to try out
+│   ├── weather-app/
+│   │   └── prd.json
+│   ├── task-tracker/
+│   │   └── prd.json
+│   └── recipe-finder/
+│       └── prd.json
+└── ralph/               # AI development tooling
+    ├── prd.json         # PRD used to build this project
+    ├── progress.txt     # Development learnings
+    ├── PROMPT.md        # Agent instructions
+    └── ralph.sh         # Runner script
 ```
 
 ## Running Tests
@@ -189,6 +194,19 @@ prdmonitor/
 ```bash
 go test ./...
 ```
+
+## The Ralph Folder
+
+The `ralph/` directory contains the tooling used to build this project, based on the [Ralph technique](https://ghuntley.com/ralph/) by Geoffrey Huntley.
+
+Ralph is a methodology for AI-assisted development that uses structured Product Requirements Documents (PRDs) to guide an AI agent through incremental feature implementation. The folder contains:
+
+- **prd.json** - The actual PRD used to build PRDMonitor, containing all 24 user stories
+- **progress.txt** - A log of learnings, patterns discovered, and implementation notes from each story
+- **PROMPT.md** - Instructions that guide the AI agent through the development workflow
+- **ralph.sh** - A shell script to invoke the AI agent
+
+This approach enables rapid, structured development where the AI works through stories one at a time, maintaining quality gates (tests pass, code compiles) and documenting learnings as it goes.
 
 ## License
 
