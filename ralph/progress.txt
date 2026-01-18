@@ -31,6 +31,18 @@
 - Use `errors.As()` to check for specific error types in tests
 - JSON unmarshaling handles missing fields gracefully (zero values)
 
+### TUI Package (Bubble Tea)
+- Uses Model-Update-View pattern with `tea.Model` interface
+- `App` is the main model, contains `Board` which contains `Column` components
+- `tui.Run(parseResults)` is the main entry point - launches the TUI program
+- `tea.WithAltScreen()` provides clean terminal switching
+- `tea.WindowSizeMsg` is used to handle terminal resize events
+- Lip Gloss styles: use `lipgloss.NewStyle()` for creating styles, chain methods
+- `lipgloss.JoinHorizontal()` and `lipgloss.JoinVertical()` for layout composition
+- Card component with box-drawing borders using `lipgloss.RoundedBorder()`
+- `truncate()` helper function for text that may exceed display width
+- Column colors: Red (203) for Incomplete, Yellow (220) for In Progress, Green (84) for Complete
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -110,4 +122,39 @@
   - `encoding/json` gracefully handles missing JSON fields with zero values
   - Batch processing pattern: return `(results, errors)` tuple for non-fatal error handling
   - Test table-driven tests with `t.Run()` for clearer test organization
+---
+
+## 2026-01-18 - PM-004
+- **What was implemented:** Terminal UI with Kanban board layout using Bubble Tea
+- **Files changed:**
+  - `internal/tui/app.go` - Main Bubble Tea model with Model-Update-View pattern
+  - `internal/tui/board.go` - Kanban board with three columns, distributes cards by status
+  - `internal/tui/column.go` - Column component with styling, card rendering, and truncation
+  - `internal/tui/tui_test.go` - Comprehensive test suite (13 test cases)
+  - `main.go` - Integrated TUI launch after parsing
+  - `go.mod`, `go.sum` - Added Bubble Tea and Lip Gloss dependencies
+- **Tests added:**
+  - TestNewColumn - Tests column creation
+  - TestColumn_AddCard - Tests adding cards to columns
+  - TestNewBoard_DistributesCardsByStatus - Tests status-based card distribution
+  - TestNewBoard_UnknownStatusDefaultsToIncomplete - Tests unknown status handling
+  - TestNewBoard_MultipleProjects - Tests aggregation from multiple PRDs
+  - TestNewBoard_EmptyParseResults - Tests empty input handling
+  - TestColumn_View_EmptyColumn - Tests empty column placeholder message
+  - TestColumn_View_WithCards - Tests column rendering with cards
+  - TestTruncate - Tests string truncation helper
+  - TestNewApp - Tests app initialization
+  - TestApp_Init - Tests Bubble Tea init
+  - TestBoard_SetSize - Tests responsive sizing
+- **Learnings:**
+  - Bubble Tea uses `tea.Model` interface with Init(), Update(), View() methods
+  - `tea.WithAltScreen()` provides clean terminal enter/exit
+  - `tea.WindowSizeMsg` is sent when terminal resizes - use for responsive layout
+  - `tea.KeyMsg` for keyboard input, check `msg.String()` for key name
+  - Lip Gloss method chaining pattern: `lipgloss.NewStyle().Bold(true).Foreground(...)`
+  - Use `lipgloss.Color("39")` for ANSI color codes (strings, not ints)
+  - `lipgloss.JoinHorizontal(lipgloss.Top, ...)` for side-by-side layout
+  - `lipgloss.RoundedBorder()` for nice box-drawing borders
+  - Column width calculation: `(terminalWidth - margins) / numColumns`
+  - TUI testing focuses on data structures since View() output is hard to assert
 ---

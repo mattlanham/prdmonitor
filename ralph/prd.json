@@ -39,7 +39,7 @@
         "Malformed JSON files are handled gracefully with error logging"
       ],
       "priority": 2,
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "id": "PM-004",
@@ -53,7 +53,7 @@
         "Uses a Go TUI library such as bubbletea or tview"
       ],
       "priority": 3,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-005",
