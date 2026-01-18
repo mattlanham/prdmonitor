@@ -264,7 +264,7 @@
         "Filter persists during the session but resets on restart"
       ],
       "priority": 19,
-      "status": "in-progress"
+      "status": "complete"
     },
     {
       "id": "PM-018",
@@ -279,6 +279,20 @@
       ],
       "priority": 20,
       "status": "incomplete"
+    },
+    {
+      "id": "PM-019",
+      "title": "Fix logo padding and use isometric 3D ASCII style",
+      "description": "As a user, I want the ASCII art logo to have proper top padding so it is not cut off, and I want it to use a clean isometric/3D style for a more distinctive and professional appearance.",
+      "acceptanceCriteria": [
+        "Logo has sufficient top padding so no part is cut off",
+        "Logo uses a clean isometric/3D ASCII art style",
+        "Logo displays 'PRD Monitor' clearly",
+        "Logo remains centered and adapts to terminal width",
+        "Visual appearance is distinctive and professional"
+      ],
+      "priority": 21,
+      "status": "in-progress"
     }
   ]
 }

@@ -139,6 +139,19 @@
 - Status colors: Green (84) for complete, Yellow (220) for in-progress, Red (203) for incomplete
 - Footer hint shows how to close expanded view
 
+### Filter Overlay Pattern
+- `FilterOverlay` component in `filter.go` with list of projects and selection state
+- `AllProjectsFilter` constant ("All Projects") is always first option in the list
+- `extractProjectNames(parseResults)` extracts unique, non-empty project names
+- App tracks: `showFilter bool`, `filterOverlay *FilterOverlay`, `projectFilter string`
+- Press `f` to toggle filter overlay (closes other overlays first)
+- Navigation in filter: arrow keys or j/k, Enter/Space to select
+- `NewBoardWithFilter(parseResults, projectFilter)` filters cards by project name
+- When filter is not "All Projects", show current filter in status bar
+- `rebuildBoard()` method applies current filter and resizes board
+- When filtered project is deleted, reset filter to "All Projects"
+- Filter persists during session but resets on restart (not persisted to disk)
+
 ---
 
 ## 2026-01-18 - PM-001
@@ -674,4 +687,49 @@
   - Integer division causes small remainders (0-2 chars) that may appear as extra margin - this is acceptable for visual balance
   - When updating padding logic, existing tests for related features (BUG-002 right padding tests) need to be updated with new formula
   - Pattern: Adding symmetric padding is a two-part change: (1) apply style in View(), (2) update dimension calculations in SetSize()
+---
+
+## 2026-01-18 - PM-017
+- **What was implemented:** Project filter overlay that allows filtering the Kanban board by project
+- **Files changed:**
+  - `internal/tui/filter.go` - New FilterOverlay component with project selection and navigation
+  - `internal/tui/app.go` - Added filter state (showFilter, filterOverlay, projectFilter), 'f' key binding, filter navigation handling, rebuildBoard() method, extractProjectNames() helper
+  - `internal/tui/board.go` - Added NewBoardWithFilter() function that filters cards by project name
+  - `internal/tui/help.go` - Added 'f' key to HelpShortcuts for filter by project
+  - `internal/tui/tui_test.go` - Added 30+ new tests for filter functionality
+- **Tests added:**
+  - TestNewFilterOverlay - Tests filter overlay creation with "All Projects" as first option
+  - TestFilterOverlay_MoveUpDown - Tests navigation within filter list
+  - TestFilterOverlay_SelectedProject - Tests project selection and retrieval
+  - TestFilterOverlay_SelectProject - Tests direct project selection by name
+  - TestFilterOverlay_UpdateProjects - Tests updating project list while preserving selection
+  - TestFilterOverlay_SetSize/View - Tests overlay sizing and rendering
+  - TestApp_ProjectFilter_InitialState - Tests initial filter state
+  - TestApp_Update_FKeyTogglesFilter - Tests 'f' key toggles filter overlay
+  - TestApp_Update_EscClosesFilter - Tests Esc closes filter
+  - TestApp_Update_FilterNavigationArrowKeys/JK - Tests navigation in filter
+  - TestApp_Update_FilterEnterSelectsProject - Tests Enter selects and closes filter
+  - TestApp_Update_FilterSpaceSelectsProject - Tests Space selects and closes filter
+  - TestApp_View_ShowsFilterOverlay - Tests filter overlay rendering
+  - TestApp_View_ShowsCurrentFilterInStatusBar - Tests filter display in status bar
+  - TestNewBoardWithFilter_FiltersCards - Tests board filtering by project
+  - TestNewBoardWithFilter_AllProjectsShowsAll - Tests "All Projects" shows all cards
+  - TestApp_FilterBlocksNavigation - Tests board navigation blocked while filter open
+  - TestApp_FilterClosesOtherOverlays - Tests filter closes help/expanded card first
+  - TestExtractProjectNames - Tests unique project name extraction
+  - TestApp_HandleFileChange_UpdatesFilterOverlay - Tests filter list updates on file changes
+  - TestApp_HandleFileChange_DeletedProjectResetsFilter - Tests filter resets when project deleted
+  - TestHelpShortcuts_ContainsFilterKey - Tests 'f' is in help shortcuts
+  - TestApp_FilterPersistsDuringSession - Tests filter persists during navigation and resize
+- **Learnings:**
+  - Overlay pattern: add showX bool and xOverlay component to App struct, handle in Update() and View()
+  - Filter overlays should block board navigation when visible (check showFilter before processing board keys)
+  - When opening an overlay, close other overlays first (help, expanded card)
+  - Use map[string]bool for extracting unique project names efficiently
+  - Board rebuild pattern: rebuildBoard() creates new board with current filter and re-applies sizing
+  - When a filtered project is deleted, reset filter to "All Projects" to avoid empty board
+  - Filter overlay navigation uses same keys as board (↑↓, j/k) for consistency
+  - Selection highlighting in list: use contrasting background color for selected item
+  - Status bar should show current filter only when it's not "All Projects" (to avoid clutter)
+  - Filter persists during session but resets on restart - this is application state not persisted to disk
 ---
