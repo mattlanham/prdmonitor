@@ -13,7 +13,7 @@
         "Error message printed to stderr if folder is invalid or inaccessible"
       ],
       "priority": 0,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-002",

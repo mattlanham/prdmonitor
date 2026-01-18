@@ -1,0 +1,40 @@
+## Codebase Patterns
+
+### Project Structure
+- Entry point: `main.go` with minimal logic, delegates to internal packages
+- Data models in `internal/model/model.go`
+- Tests use Go's `testing` package with `t.TempDir()` for temp directories
+- Config struct pattern for CLI configuration
+
+### CLI Argument Parsing
+- `ParseArgs(args []string)` takes os.Args to allow testing
+- Returns `*Config, error` pattern for validation
+- Errors are printed to stderr, exit code 1 for failures
+
+### Error Handling
+- Use `fmt.Errorf` with `%w` for wrapping errors
+- Check `os.IsNotExist(err)` for cleaner error messages
+- Validate directory is readable by attempting to open it
+
+---
+
+## 2026-01-18 - PM-001
+- **What was implemented:** CLI argument parsing for folder selection with validation
+- **Files changed:**
+  - `main.go` - Entry point with ParseArgs and ValidateFolder functions
+  - `main_test.go` - 7 test cases for argument parsing and folder validation
+  - `internal/model/model.go` - Data structures for PRD and UserStory
+- **Tests added:**
+  - TestParseArgs_WithValidFolder
+  - TestParseArgs_DefaultToCurrentDirectory
+  - TestParseArgs_NonExistentFolder
+  - TestParseArgs_FileNotDirectory
+  - TestValidateFolder_ValidDirectory
+  - TestValidateFolder_NonExistent
+  - TestValidateFolder_NotADirectory
+- **Learnings:**
+  - Use `t.TempDir()` for creating temp directories in tests (auto-cleaned up)
+  - Pass `[]string` for args to make functions testable without mocking os.Args
+  - Check directory readability by attempting `os.Open()` on it
+  - Go 1.24 is the current version (updated from AGENTS.md which says 1.21+)
+---
