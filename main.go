@@ -4,6 +4,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"lanham/prdmonitor/internal/parser"
 	"lanham/prdmonitor/internal/scanner"
@@ -72,8 +74,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Scan for prd.json files
-	result, err := scanner.Scan(config.RootDir)
+	// Display startup message
+	fmt.Printf("PRDMonitor starting with root directory: %s\n", config.RootDir)
+
+	// Create progress callback for large directory scanning
+	var lastProgress scanner.ScanProgress
+	progressCallback := func(progress scanner.ScanProgress) {
+		if progress.IsComplete {
+			// Clear progress line and print final result
+			fmt.Printf("\r\033[K") // Clear the line
+			return
+		}
+		// Show progress for large directory scans
+		if progress.DirsScanned > 10 { // Only show progress if scanning many directories
+			// Truncate current directory for display
+			currentDir := progress.CurrentDir
+			if len(currentDir) > 50 {
+				// Show just the last part of the path
+				parts := strings.Split(currentDir, string(filepath.Separator))
+				if len(parts) > 3 {
+					currentDir = "..." + string(filepath.Separator) + strings.Join(parts[len(parts)-3:], string(filepath.Separator))
+				}
+			}
+			fmt.Printf("\rScanning: %d dirs, %d prd.json found | %s", progress.DirsScanned, progress.FilesFound, currentDir)
+		}
+		lastProgress = progress
+	}
+	_ = lastProgress // Avoid unused variable warning
+
+	// Scan for prd.json files with progress reporting
+	result, err := scanner.ScanWithProgress(config.RootDir, progressCallback)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error scanning directory: %v\n", err)
 		os.Exit(1)
@@ -87,7 +117,6 @@ func main() {
 	}
 
 	// Display the number of discovered projects
-	fmt.Printf("PRDMonitor starting with root directory: %s\n", config.RootDir)
 	fmt.Printf("Discovered %d project(s)\n", result.Count())
 
 	// Parse all discovered prd.json files

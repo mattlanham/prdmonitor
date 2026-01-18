@@ -278,7 +278,7 @@
         "Application remains responsive during file discovery"
       ],
       "priority": 20,
-      "status": "incomplete"
+      "status": "complete"
     },
     {
       "id": "PM-019",

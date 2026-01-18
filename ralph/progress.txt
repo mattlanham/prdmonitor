@@ -17,15 +17,20 @@
 - Validate directory is readable by attempting to open it
 
 ### Scanner Package
-- Use `filepath.WalkDir` for recursive directory traversal (more efficient than `filepath.Walk`)
 - Return `*ScanResult` with both files and non-fatal errors
 - Convert paths to absolute using `filepath.Abs()` for consistency
 - Custom error types (e.g., `NotADirectoryError`) for specific error handling
 - Module name is `lanham/prdmonitor` (important for internal imports)
 - **Directory Skipping**: `SkipDirs` map contains large directories to skip (node_modules, .git, vendor, etc.)
   - `ShouldSkipDir(name)` checks if a directory should be skipped
-  - Use `filepath.SkipDir` return value from WalkDir callback to skip entire subtrees efficiently
   - Prevents scanning massive directories that won't contain prd.json files
+- **Parallel Scanning**: `parallelScan()` uses worker pool pattern for fast file discovery
+  - `ScanWithProgress(root, callback)` scans with optional progress reporting
+  - Worker count: `min(max(runtime.NumCPU(), 2), 8)` for optimal parallelism
+  - Channel-based work distribution with buffered channels (1000 for dirs, 100 for results)
+  - Atomic counters for progress tracking (`sync/atomic`)
+  - Progress callback receives `ScanProgress{DirsScanned, FilesFound, CurrentDir, IsComplete}`
+  - 100ms progress update interval via `time.Ticker`
 
 ### Parser Package
 - `ParseFile(filePath)` returns `*ParseResult, error` - reads and parses a single file
@@ -765,4 +770,38 @@
   - Narrow terminal (simple text): 1 + 2 + 1 + 3 + 2 = 9 reserved lines
   - Use `len([]rune(line))` to measure visual character width for Unicode strings
   - The simple text fallback should also be updated to match the ASCII art's message ("PRD Monitor" with space)
+---
+
+## 2026-01-18 - PM-018
+- **What was implemented:** Fast prd.json file discovery with parallel scanning and progress reporting
+- **Files changed:**
+  - `internal/scanner/scanner.go` - Added parallel directory scanning using worker pool pattern, added ScanProgress struct and ProgressCallback type, added ScanWithProgress() function, implemented parallelScan() with goroutine workers
+  - `internal/scanner/scanner_test.go` - Added 12 new tests for fast discovery functionality
+  - `main.go` - Integrated progress callback to display scanning progress for large directories
+- **Tests added:**
+  - TestScanWithProgress_CallsCallback - Tests progress callback is called during scanning
+  - TestScanWithProgress_NilCallback - Tests graceful handling of nil callback
+  - TestScanProgress_Fields - Tests ScanProgress struct fields
+  - TestParallelScan_FindsAllFiles - Tests parallel scan finds all prd.json files at various depths
+  - TestParallelScan_SkipsLargeDirectories - Tests parallel scan respects SkipDirs
+  - TestParallelScan_HandlesEmptyDirectory - Tests empty directory handling
+  - TestParallelScan_HandlesDeepNesting - Tests deep directory nesting (20 levels)
+  - TestParallelScan_HandlesManyDirectories - Tests scanning 100 directories
+  - TestParallelScan_ProgressTracksDirsScanned - Tests progress tracks directory count
+  - TestScan_Pycache_IsSkipped - Tests __pycache__ is skipped (PM-018 requirement)
+  - TestShouldSkipDir_AllRequiredDirsInSkipList - Verifies required skip dirs from acceptance criteria
+- **Learnings:**
+  - Worker pool pattern: create fixed number of goroutines that consume from a work queue channel
+  - Use `atomic.AddInt64` for concurrent counters to avoid data races
+  - Use `sync.WaitGroup` to track when all workers have finished
+  - Pending work tracking: increment before queuing, decrement after processing to know when work is done
+  - Channel buffer sizing is important: large buffers (1000) for directory queue to avoid blocking
+  - Fallback to synchronous processing when channel is full prevents deadlock
+  - Progress reporting: use goroutine with ticker (100ms interval) for regular updates
+  - `time.Ticker` must be stopped with defer to avoid resource leaks
+  - Progress callback should receive complete=true for final callback
+  - Path truncation for display: show last 3 components with "..." prefix for long paths
+  - `\r\033[K` clears the current line for overwriting progress text
+  - Runtime.NumCPU() determines optimal worker count, but cap at 8 to avoid too many file handles
+  - Skip dirs were already implemented (BUG-003), PM-018 focused on parallelism and progress
 ---
